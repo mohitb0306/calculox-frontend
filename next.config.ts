@@ -95,6 +95,10 @@ const nextConfig: NextConfig = {
         source: '/:path*-sitemap.xml',
         destination: `${PHP_BACKEND}/sitemap.php?type=:path*`,
       },
+      {
+        source: '/main-sitemap.xsl',
+        destination: `${PHP_BACKEND}/main-sitemap.php`,
+      },
     ];
   },
 };

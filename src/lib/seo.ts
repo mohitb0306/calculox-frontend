@@ -171,6 +171,25 @@ export function constructMetadata({ data = {}, settings = {}, type, context = {}
   // 5. ROBOTS CASCADING LOGIC (FIXED)
   // =========================================================
   const getRobots = () => {
+    // --- 0. ENTERPRISE SHIELD: MASTER OVERRIDE ---
+    const isGlobalSearchEnabled = settings?.seo_global_search_visibility === true || settings?.seo_global_search_visibility === 'true' || settings?.seo_global_search_visibility === '1' || settings?.seo_global_search_visibility === 1;
+    
+    if (!isGlobalSearchEnabled) {
+        return {
+            index: false,
+            follow: false,
+            nocache: true,
+            googleBot: {
+                index: false,
+                follow: false,
+                noimageindex: true,
+                'max-video-preview': -1,
+                'max-image-preview': 'none',
+                'max-snippet': -1,
+            }
+        };
+    }
+
     // --- CLEAN, INDUSTRY-STANDARD 404 TAGS ---
     if (type === '404') {
         return {

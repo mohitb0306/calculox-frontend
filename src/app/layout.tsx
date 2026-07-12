@@ -58,9 +58,12 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 
   // --- ENTERPRISE FIX: THE SEO SHIELD ---
-  // If the server environment vault declares this as a 'staging' or 'development' site,
-  // we globally block all search engine crawlers to protect the Production SEO ranking.
-  if (process.env.NEXT_PUBLIC_APP_ENV === 'staging' || process.env.NEXT_PUBLIC_APP_ENV === 'development') {
+  // Master Global Indexing Toggle: Strictly blocks search engines if visibility is disabled
+  // in the cPanel, overriding all page-level settings to prevent dummy data leakage.
+  // Combines environment layer fallback for Defense in Depth.
+  const isGlobalSearchEnabled = settings?.seo_global_search_visibility === true || settings?.seo_global_search_visibility === 'true' || settings?.seo_global_search_visibility === '1' || settings?.seo_global_search_visibility === 1;
+
+  if (!isGlobalSearchEnabled || process.env.NEXT_PUBLIC_APP_ENV === 'staging' || process.env.NEXT_PUBLIC_APP_ENV === 'development') {
     metadata.robots = {
       index: false,
       follow: false,

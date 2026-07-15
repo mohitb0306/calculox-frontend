@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Ignore Next.js internal files, images, and API routes
+  // 1. Ignore Next.js internal files, images, API routes, and our custom error pages
   // SECURITY FIX: Added /legal-block and /content-gone to prevent infinite routing loops
   if (
     pathname.startsWith('/_next') ||
@@ -32,7 +32,7 @@ export async function proxy(request: NextRequest) {
     // 4. Ask the backend if a redirect rule exists for this typo/broken link
     const res = await fetch(fetchUrl, {
       method: 'GET',
-      // PERFORMANCE FIX: Cache the database response at the edge for 60 seconds to prevent DDoS
+      // PERFORMANCE FIX: Cache database responses at the edge for 60 seconds to prevent DDoS
       next: { revalidate: 60 },
       signal: controller.signal
     });
@@ -55,7 +55,9 @@ export async function proxy(request: NextRequest) {
           const statusText = isLegal ? "Unavailable For Legal Reasons" : "Gone";
 
           // Step A: Internally fetch the beautifully designed React layout
-          const uiResponse = await fetch(new URL(uiPath, request.url));
+          // DOCKER FIX: Use 127.0.0.1:3000 to bypass live server public loopback restrictions
+          const internalUrl = `http://127.0.0.1:3000${uiPath}`;
+          const uiResponse = await fetch(internalUrl);
           const html = await uiResponse.text();
           
           // Step B: Return that layout directly from the Edge, explicitly forcing the status
@@ -65,7 +67,7 @@ export async function proxy(request: NextRequest) {
             headers: {
               'Content-Type': 'text/html; charset=utf-8',
               'X-Robots-Tag': 'noindex, noarchive',
-              'Cache-Control': 's-maxage=60, stale-while-revalidate', // PERFORMANCE FIX
+              'Cache-Control': 's-maxage=60, stale-while-revalidate',
             },
           });
         }

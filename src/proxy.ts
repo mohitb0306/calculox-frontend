@@ -5,11 +5,14 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Ignore Next.js internal files, images, and API routes
+  // SECURITY FIX: Added /legal-block and /content-gone to prevent infinite routing loops
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||
     pathname.includes('.') ||
-    pathname === '/'
+    pathname === '/' ||
+    pathname === '/legal-block' ||
+    pathname === '/content-gone'
   ) {
     return NextResponse.next();
   }
@@ -19,14 +22,22 @@ export async function proxy(request: NextRequest) {
     const cleanPath = pathname.replace(/^\/+/, "");
 
     // 3. Define the PHP Backend URL 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.calculox.com/api';
     const fetchUrl = `${baseUrl}/public/check_redirect.php?path=${encodeURIComponent(cleanPath)}`;
+
+    // SECURITY FIX: Implement a strict 3-second timeout to prevent Edge Worker exhaustion
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     // 4. Ask the backend if a redirect rule exists for this typo/broken link
     const res = await fetch(fetchUrl, {
       method: 'GET',
-      cache: 'no-store'
+      // PERFORMANCE FIX: Cache the database response at the edge for 60 seconds to prevent DDoS
+      next: { revalidate: 60 },
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (res.ok) {
       const data = await res.json();
@@ -54,17 +65,23 @@ export async function proxy(request: NextRequest) {
             headers: {
               'Content-Type': 'text/html; charset=utf-8',
               'X-Robots-Tag': 'noindex, noarchive',
+              'Cache-Control': 's-maxage=60, stale-while-revalidate', // PERFORMANCE FIX
             },
           });
         }
 
         // --- EXISTING: Handle Standard Redirects (301, 302, 307, 308) ---
         if (rule.target_url) {
-          const target = rule.target_url;
+          // SECURITY FIX: Ensure the target is a fully qualified URL to prevent Host Header Injection
+          let target = rule.target_url;
+          if (!target.startsWith('http://') && !target.startsWith('https://')) {
+            target = new URL(target, request.url).toString();
+          }
+
           // Apply 308 for Permanent Moves, 307 for Temporary
           const statusCode = rule.status_code === 301 || rule.status_code === 308 ? 308 : 307;
 
-          return NextResponse.redirect(new URL(target, request.url), statusCode);
+          return NextResponse.redirect(target, statusCode);
         }
       }
     }

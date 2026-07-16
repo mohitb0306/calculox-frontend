@@ -265,7 +265,6 @@ export async function getSystemSlugs(): Promise<SystemSlugMap> {
       const pages = response.data.pages;
       // Loop through pages and update map where page_key matches
       // pages is an object keyed by page_key (e.g. 'about': { slug: 'our-story', ... })
-      Object. filter(Boolean);
       Object.keys(pages).forEach((key) => {
         const page = pages[key];
         if (page && page.slug && map.hasOwnProperty(key)) {

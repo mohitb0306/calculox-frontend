@@ -1,8 +1,10 @@
 // calculox-frontend-main/src/app/robots.txt/route.ts
 import { NextResponse } from 'next/server';
 
-// CACHING: Next.js will cache this response and only ask the database once per hour.
-export const revalidate = 3600;
+// [ENTERPRISE FIX 1] Force Next.js to run this live, never at build-time.
+// This prevents Coolify Docker networking failures during the build step.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Disable static cache to guarantee live data fetching
 
 export async function GET() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'https://calculox.com';
@@ -11,7 +13,6 @@ export async function GET() {
 
   // ========================================================================
   // GRACEFUL FAILOVER DEFAULTS
-  // If the API crashes or is unreachable, this guarantees your SEO stays alive.
   // ========================================================================
   const defaultRobots = `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\n\nSitemap: ${baseUrl}/sitemap.xml\n`;
 
@@ -23,29 +24,28 @@ export async function GET() {
         'Authorization': `Bearer ${internalToken}`,
         'Accept': 'application/json'
       },
-      // Fail fast: If the API takes longer than 10 seconds, abort to protect Next.js speed.
+      // [ENTERPRISE FIX 2] Force fetch to bypass Next.js internal fetch cache
+      cache: 'no-store',
       signal: AbortSignal.timeout(10000)
     });
 
     if (!response.ok) {
-      throw new Error(`API Offline or Rejected Token: ${response.status}`);
+      throw new Error(`API Offline or Rejected Token. HTTP Status: ${response.status}`);
     }
 
     const json = await response.json();
     if (!json.success || !json.data) {
-      throw new Error('Invalid JSON received');
+      throw new Error('Invalid JSON received from PHP Backend');
     }
 
     const { seo_global_search_visibility, seo_robots_custom_enable, seo_robots_custom_content } = json.data;
 
-    // --- ENTERPRISE FIX: Strict Boolean Coercion ---
-    // Safely parse database strings ("0", "1", "false", "true") into absolute JavaScript booleans
-    // to prevent truthy string bypasses that expose staging sites to search engines.
+    // Strict Boolean Coercion
     const isIndexingEnabled = seo_global_search_visibility === true || seo_global_search_visibility === 1 || seo_global_search_visibility === '1' || String(seo_global_search_visibility).toLowerCase() === 'true';
     const isCustomRobotsEnabled = seo_robots_custom_enable === true || seo_robots_custom_enable === 1 || seo_robots_custom_enable === '1' || String(seo_robots_custom_enable).toLowerCase() === 'true';
 
     // ========================================================================
-    // 2. APPLY ADMIN PANEL RULES (Preserving 100% Functionality)
+    // 2. APPLY ADMIN PANEL RULES
     // ========================================================================
 
     // Scenario A: Global visibility is explicitly disabled in cPanel
@@ -59,7 +59,6 @@ export async function GET() {
     if (isCustomRobotsEnabled && seo_robots_custom_content && seo_robots_custom_content.trim() !== '') {
       let output = seo_robots_custom_content.trim();
       
-      // Safety check: ensure Sitemap is appended if they forgot it
       if (!output.toLowerCase().includes('sitemap:')) {
         output += `\n\nSitemap: ${baseUrl}/sitemap.xml`;
       }
@@ -73,13 +72,16 @@ export async function GET() {
       headers: { 'Content-Type': 'text/plain' },
     });
 
-  } catch (error) {
+  } catch (error: any) {
     // ========================================================================
-    // 3. FAILOVER EXECUTION
-    // Log the error silently, but serve the safe defaults to search engines.
+    // 3. FAILOVER EXECUTION WITH DEBUG GLASS WINDOW
     // ========================================================================
     console.error('SEO Tunnel Error: Serving fallback SEO rules.', error);
-    return new NextResponse(defaultRobots, {
+    
+    // [ENTERPRISE FIX 3] Inject the exact error reason into the output so we can see it live!
+    const debugOutput = `${defaultRobots}\n# ==========================================\n# SYSTEM DIAGNOSTIC ERROR: \n# ${error.message}\n# ==========================================`;
+    
+    return new NextResponse(debugOutput, {
       headers: { 'Content-Type': 'text/plain' },
     });
   }

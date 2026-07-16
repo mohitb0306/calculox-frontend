@@ -1,4 +1,3 @@
-// calculox-frontend-main/src/app/robots.txt/route.ts
 import { NextResponse } from 'next/server';
 
 // [ENTERPRISE FIX 1] Force Next.js to run this live, never at build-time.
@@ -18,7 +17,8 @@ export async function GET() {
 
   try {
     // 1. SECURE TUNNEL CONNECTION
-    const response = await fetch(`${apiUrl}/api/public/get_seo_config.php`, {
+    // THE FIX: Removed the extra hardcoded '/api' to align with the NEXT_PUBLIC_API_URL variable
+    const response = await fetch(`${apiUrl}/public/get_seo_config.php`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${internalToken}`,
@@ -26,27 +26,32 @@ export async function GET() {
       },
       // [ENTERPRISE FIX 2] Force fetch to bypass Next.js internal fetch cache
       cache: 'no-store',
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(10000) // 10-second absolute timeout
     });
 
     if (!response.ok) {
       throw new Error(`API Offline or Rejected Token. HTTP Status: ${response.status}`);
     }
 
-    const json = await response.json();
-    if (!json.success || !json.data) {
-      throw new Error('Invalid JSON received from PHP Backend');
+    const result = await response.json();
+    
+    if (!result.success || !result.data) {
+      throw new Error('API returned malformed SEO data.');
     }
 
-    const { seo_global_search_visibility, seo_robots_custom_enable, seo_robots_custom_content } = json.data;
-
-    // Strict Boolean Coercion
-    const isIndexingEnabled = seo_global_search_visibility === true || seo_global_search_visibility === 1 || seo_global_search_visibility === '1' || String(seo_global_search_visibility).toLowerCase() === 'true';
-    const isCustomRobotsEnabled = seo_robots_custom_enable === true || seo_robots_custom_enable === 1 || seo_robots_custom_enable === '1' || String(seo_robots_custom_enable).toLowerCase() === 'true';
+    const {
+      seo_global_search_visibility,
+      seo_robots_custom_enable,
+      seo_robots_custom_content
+    } = result.data;
 
     // ========================================================================
-    // 2. APPLY ADMIN PANEL RULES
+    // 2. SEO DECISION ENGINE
     // ========================================================================
+    
+    // Strict boolean parsing for maximum safety
+    const isIndexingEnabled = seo_global_search_visibility === true || seo_global_search_visibility === '1' || seo_global_search_visibility === 'true';
+    const isCustomRobotsEnabled = seo_robots_custom_enable === true || seo_robots_custom_enable === '1' || seo_robots_custom_enable === 'true';
 
     // Scenario A: Global visibility is explicitly disabled in cPanel
     if (!isIndexingEnabled) {

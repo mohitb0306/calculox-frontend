@@ -38,19 +38,25 @@ export async function GET() {
 
     const { seo_global_search_visibility, seo_robots_custom_enable, seo_robots_custom_content } = json.data;
 
+    // --- ENTERPRISE FIX: Strict Boolean Coercion ---
+    // Safely parse database strings ("0", "1", "false", "true") into absolute JavaScript booleans
+    // to prevent truthy string bypasses that expose staging sites to search engines.
+    const isIndexingEnabled = seo_global_search_visibility === true || seo_global_search_visibility === 1 || seo_global_search_visibility === '1' || String(seo_global_search_visibility).toLowerCase() === 'true';
+    const isCustomRobotsEnabled = seo_robots_custom_enable === true || seo_robots_custom_enable === 1 || seo_robots_custom_enable === '1' || String(seo_robots_custom_enable).toLowerCase() === 'true';
+
     // ========================================================================
     // 2. APPLY ADMIN PANEL RULES (Preserving 100% Functionality)
     // ========================================================================
 
     // Scenario A: Global visibility is explicitly disabled in cPanel
-    if (!seo_global_search_visibility) {
+    if (!isIndexingEnabled) {
       return new NextResponse("User-agent: *\nDisallow: /\n", {
         headers: { 'Content-Type': 'text/plain' },
       });
     }
 
     // Scenario B: Custom rules are enabled in cPanel
-    if (seo_robots_custom_enable && seo_robots_custom_content && seo_robots_custom_content.trim() !== '') {
+    if (isCustomRobotsEnabled && seo_robots_custom_content && seo_robots_custom_content.trim() !== '') {
       let output = seo_robots_custom_content.trim();
       
       // Safety check: ensure Sitemap is appended if they forgot it

@@ -96,8 +96,10 @@ const isSuccess = (data: any) => {
 // --- API Fetching Functions ---
 
 export async function getPageBySlug(slug: string): Promise<PageContent | null> {
+  if (!slug) return null;
   try {
-    const data = await fetchAPI(`/public/get_public_page.php?slug=${slug}`, {
+    const safeSlug = encodeURIComponent(slug);
+    const data = await fetchAPI(`/public/get_public_page.php?slug=${safeSlug}`, {
       method: "GET",
       cache: "no-store", 
     });
@@ -109,8 +111,10 @@ export async function getPageBySlug(slug: string): Promise<PageContent | null> {
 }
 
 export async function getCalculatorBySlug(slug: string): Promise<CalculatorContent | null> {
+  if (!slug) return null;
   try {
-    const data = await fetchAPI(`/public/get_public_calculator.php?slug=${slug}`, {
+    const safeSlug = encodeURIComponent(slug);
+    const data = await fetchAPI(`/public/get_public_calculator.php?slug=${safeSlug}`, {
       method: "GET",
       cache: "no-store",
     });
@@ -261,6 +265,7 @@ export async function getSystemSlugs(): Promise<SystemSlugMap> {
       const pages = response.data.pages;
       // Loop through pages and update map where page_key matches
       // pages is an object keyed by page_key (e.g. 'about': { slug: 'our-story', ... })
+      Object. filter(Boolean);
       Object.keys(pages).forEach((key) => {
         const page = pages[key];
         if (page && page.slug && map.hasOwnProperty(key)) {

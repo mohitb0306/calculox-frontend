@@ -161,7 +161,7 @@ const Footer = ({ settings = {}, slugs }: FooterProps) => {
         </div>
 
         {/* --- BRAND TEXT HOVER EFFECT --- */}
-        <div className="relative w-full h-32 md:h-48 flex items-center justify-center overflow-hidden mb-8">
+        <div className="relative w-full h-[15vh] sm:h-[20vh] md:h-[25vh] lg:h-56 flex items-center justify-center overflow-hidden mb-8">
             <TextHoverEffect text={siteName.toUpperCase()} />
         </div>
 

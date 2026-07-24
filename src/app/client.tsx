@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useTransform, useSpring, animate } from "framer-motion";
 import SafeIcon from "@/components/common/SafeIcon";
 import { 
-  ArrowRight, Check, PieChart, Lock, Cloud, User, 
+  ArrowRight, Check, PieChart, Lock, Cloud, 
   Star, Layout, DollarSign, TrendingUp 
 } from "lucide-react";
 import { FiCpu } from "react-icons/fi"; 
@@ -22,7 +22,7 @@ const DEFAULTS = {
     subheading: "Access 20+ premium calculators designed for accuracy, speed, and professional reliability.",
     heroBtnStart: "Start Calculating",
     heroBtnDashboard: "Go to Dashboard",
-    heroBtnRegister: "Create Free Account",
+    heroFreeText: "It's free to use!",
     
     popCalcBadge: "Most Used Tools",
     popCalcHeading: "Popular Calculators",
@@ -224,15 +224,72 @@ const TestimonialCard = ({ name, role, text, image, rating }: any) => {
 
 const SimulatedCalculator = () => {
   const [step, setStep] = useState(0);
+  const [displayResult, setDisplayResult] = useState(0);
+
+  // Advanced 3D Parallax Tracking
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const mouseXSpring = useSpring(x, { stiffness: 150, damping: 20 });
+  const mouseYSpring = useSpring(y, { stiffness: 150, damping: 20 });
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["6deg", "-6deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-6deg", "6deg"]);
+  
+  // Depth effects for floating widgets
+  const floatX1 = useTransform(mouseXSpring, [-0.5, 0.5], ["15px", "-15px"]);
+  const floatY1 = useTransform(mouseYSpring, [-0.5, 0.5], ["-15px", "15px"]);
+  const floatX2 = useTransform(mouseXSpring, [-0.5, 0.5], ["-15px", "15px"]);
+  const floatY2 = useTransform(mouseYSpring, [-0.5, 0.5], ["15px", "-15px"]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    x.set(mouseX / width - 0.5);
+    y.set(mouseY / height - 0.5);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
 
   useEffect(() => {
     const loop = setInterval(() => { setStep(prev => (prev + 1) % 3); }, 4000); 
     return () => clearInterval(loop);
   }, []);
 
+  // Smooth Number Counter
+  useEffect(() => {
+     if (step === 2) {
+        const controls = animate(0, 932.15, {
+           duration: 1.2,
+           ease: "easeOut",
+           onUpdate: (val) => setDisplayResult(val)
+        });
+        return controls.stop;
+     } else {
+        setDisplayResult(0);
+     }
+  }, [step]);
+
   return (
-    <div className="relative w-full max-w-[500px] mx-auto perspective-1000">
+    <motion.div 
+        className="relative w-full max-w-[500px] mx-auto perspective-1000"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+    >
+        {/* PREMIUM UPGRADE: Institutional glow backdrop behind the calculator */}
         <motion.div 
+            className="absolute inset-0 bg-gradient-to-tr from-indigo-500/30 via-purple-500/20 to-emerald-500/20 blur-[80px] rounded-full z-0 pointer-events-none" 
+            animate={{ opacity: step === 1 ? 1 : 0.5 }}
+            transition={{ duration: 1 }}
+        />
+
+        <motion.div 
+            style={{ x: floatX1, y: floatY1, translateZ: 30 }}
             animate={{ y: [-10, 10, -10] }}
             transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
             className="hidden sm:flex absolute -top-6 -right-4 z-30 bg-white dark:bg-slate-800 p-3.5 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 items-center gap-3 ring-1 ring-slate-900/5"
@@ -247,6 +304,7 @@ const SimulatedCalculator = () => {
         </motion.div>
 
         <motion.div 
+            style={{ x: floatX2, y: floatY2, translateZ: 40 }}
             animate={{ y: [10, -10, 10] }}
             transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
             className="hidden sm:flex absolute -bottom-6 -left-4 z-30 bg-white dark:bg-slate-800 p-3.5 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 items-center gap-3 ring-1 ring-slate-900/5"
@@ -261,10 +319,17 @@ const SimulatedCalculator = () => {
         </motion.div>
 
         <motion.div 
-            initial={{ rotateX: 5, rotateY: -5 }}
-            animate={{ rotateX: 0, rotateY: 0 }}
-            transition={{ duration: 2, ease: "easeOut" as const }}
-            className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700 relative z-20 ring-1 ring-slate-900/5 w-full"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ 
+                y: [0, -15, 0],
+                opacity: 1 
+            }}
+            transition={{ 
+                opacity: { duration: 0.8 },
+                y: { duration: 6, repeat: Infinity, ease: "easeInOut" }
+            }}
+            className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-3xl p-6 shadow-[0_30px_60px_rgba(0,0,0,0.12)] dark:shadow-[0_30px_60px_rgba(0,0,0,0.6)] border border-white/60 dark:border-slate-700/50 relative z-20 ring-1 ring-slate-900/5 w-full"
+            style={{ translateZ: 10 }}
         >
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3">
@@ -284,7 +349,7 @@ const SimulatedCalculator = () => {
                     <div className="h-11 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center px-4 relative overflow-hidden transition-all focus-within:border-blue-500">
                         <span className="text-slate-400 text-sm mr-2 font-medium">$</span>
                         <span className="text-slate-900 dark:text-white font-mono font-bold text-base">
-                            {step >= 1 ? "50,000" : ""}
+                            {step >= 1 && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>50,000</motion.span>}
                         </span>
                         {step === 0 && <motion.span animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.8, repeat: Infinity }} className="h-5 w-0.5 bg-blue-600 absolute left-8" />}
                     </div>
@@ -293,23 +358,31 @@ const SimulatedCalculator = () => {
                     <div>
                         <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wide ml-1 mb-1 block">Rate %</label>
                         <div className="h-11 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center px-4 text-slate-900 dark:text-white font-mono font-bold text-base">
-                           {step >= 1 ? "4.5" : ""}
+                           {step >= 1 && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>4.5</motion.span>}
                         </div>
                     </div>
                     <div>
                         <label className="text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wide ml-1 mb-1 block">Years</label>
                          <div className="h-11 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center px-4 text-slate-900 dark:text-white font-mono font-bold text-base">
-                            {step >= 1 ? "5" : ""}
+                            {step >= 1 && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>5</motion.span>}
                         </div>
                     </div>
                 </div>
             </div>
 
             <motion.div 
-                className="mt-6 h-11 w-full bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center cursor-pointer overflow-hidden shadow-lg"
+                className="mt-6 h-11 w-full bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center cursor-pointer overflow-hidden shadow-lg relative"
                 animate={{ scale: step === 1 ? 0.98 : 1 }}
             >
-                <span className={`text-xs font-bold uppercase tracking-wide ${step === 2 ? 'text-emerald-400 dark:text-emerald-600' : 'text-white dark:text-slate-900'}`}>
+                {step === 1 && (
+                    <motion.div 
+                        className="absolute inset-0 bg-indigo-500/20 dark:bg-indigo-400/20"
+                        initial={{ x: "-100%" }}
+                        animate={{ x: "100%" }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    />
+                )}
+                <span className={`text-xs font-bold uppercase tracking-wide z-10 ${step === 2 ? 'text-emerald-400 dark:text-emerald-600' : 'text-white dark:text-slate-900'}`}>
                     {step === 0 ? "Calculate Now" : step === 1 ? "Processing..." : "View Results"}
                 </span>
             </motion.div>
@@ -327,12 +400,12 @@ const SimulatedCalculator = () => {
                         className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight"
                         animate={{ opacity: step === 2 ? 1 : 0.3, filter: step === 2 ? 'blur(0px)' : 'blur(4px)' }}
                      >
-                         $932.15
+                         ${displayResult.toFixed(2)}
                      </motion.span>
                  </div>
              </div>
         </motion.div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -439,7 +512,7 @@ const ClientHome = ({ initialData, featuredCalculators, recentPosts, settings }:
                         {(content.subheading || DEFAULTS.subheading).replace('20+', `${heroNumber}+`)}
                      </motion.p>
 
-                    <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                    <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start">
                         <Link 
                            href="/calculators"
                            className="inline-flex items-center justify-center px-8 py-3.5 text-sm font-bold text-white transition-all duration-200 bg-slate-900 dark:bg-white dark:text-slate-900 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-200 shadow-2xl shadow-slate-900/20 dark:shadow-none hover:-translate-y-0.5"
@@ -447,12 +520,11 @@ const ClientHome = ({ initialData, featuredCalculators, recentPosts, settings }:
                            {content.heroBtnStart || DEFAULTS.heroBtnStart} <SafeIcon icon={ArrowRight} className="ml-2 w-4 h-4" />
                         </Link>
 
-                        <Link
-                          href="/register"
-                          className="inline-flex items-center justify-center px-8 py-3.5 text-sm font-bold text-slate-700 dark:text-white transition-all duration-200 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 hover:-translate-y-0.5"
+                        <span
+                          className="inline-flex items-center justify-center py-3.5 text-sm font-bold text-slate-700 dark:text-white select-none"
                         >
-                          <SafeIcon icon={User} className="mr-2 w-4 h-4" /> {content.heroBtnRegister || DEFAULTS.heroBtnRegister}
-                        </Link>
+                          <SafeIcon icon={Check} className="mr-2 w-4 h-4 text-emerald-500" /> {content.heroFreeText || DEFAULTS.heroFreeText}
+                        </span>
                     </motion.div>
                  </motion.div>
 
@@ -460,7 +532,7 @@ const ClientHome = ({ initialData, featuredCalculators, recentPosts, settings }:
                    initial={{ opacity: 0, x: 50 }}
                    animate={{ opacity: 1, x: 0 }}
                    transition={{ duration: 1, delay: 0.2, ease: "easeOut" as const }}
-                   className="relative w-full max-w-xl flex-1 flex justify-center lg:justify-end"
+                   className="relative w-full max-w-xl flex-1 hidden lg:flex justify-center lg:justify-end"
                  >
                      <SimulatedCalculator />
                  </motion.div>

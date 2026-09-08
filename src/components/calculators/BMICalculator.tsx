@@ -282,7 +282,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
 
   const springConfig = prefersReducedMotion 
     ? { duration: 0 } 
-    : { type: "spring", stiffness: 50, damping: 12, mass: 0.8 };
+    : { type: "spring" as const, stiffness: 50, damping: 12, mass: 0.8 };
 
   const gridData = useMemo(() => {
     if (!hasCalculated || hasError || bmi === 0) return null;

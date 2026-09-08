@@ -11,13 +11,15 @@ import { renderCalculatorComponent } from "@/components/calculators/Registry";
 import Breadcrumbs from "@/components/seo/Breadcrumbs";
 import { normalizeHtml } from "@/lib/utils";
 import RichTextRenderer from "@/components/common/RichTextRenderer"; // <-- ADDED INTERCEPTOR
+import { generateResultImage } from "@/lib/reports/generateResultImage";
+import type { ShareableReport } from "@/lib/reports/types";
 
 // Data
 import { CalculatorContent } from "@/lib/content";
 import { getVisuals } from "@/data/calculatorData";
 
 const {
-  FiArrowLeft, FiBookmark, FiShare2, FiSave, FiCheck,
+  FiArrowLeft, FiShare2, FiSave, FiCheck, FiDownload, FiLoader,
   FiChevronDown, FiChevronUp, FiTag, FiUser, FiCpu,
   FiClock
 } = FiIcons;
@@ -76,9 +78,14 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   // However, since we pass 'calculator' prop from server, we initialize with it.
   const [pageData, setPageData] = useState<any>(calculator);
   
-  const [isBookmarked, setIsBookmarked] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [hasPerformedCalculation, setHasPerformedCalculation] = useState(false);
+
+  // Step C: the current calculator's shareable report (BMICalculator, and any
+  // future calculator, reports this up via the generic onReportChange prop).
+  // null means there's nothing to download yet.
+  const [currentReport, setCurrentReport] = useState<ShareableReport | null>(null);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   
   const getCalculationDataHandler = useRef<(() => any) | null>(null);
 
@@ -100,24 +107,6 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     fetchFullData();
   }, [calculator.slug]);
 
-  // --- 2. Load Bookmark Status ---
-  useEffect(() => {
-    if (user && user.id) {
-      const checkBookmark = async () => {
-        try {
-          const res = await fetchAPI(`/public/get_bookmarks.php?userId=${user.id}`, { method: 'GET' });
-          if (res.success && res.bookmarks) {
-            const isSaved = res.bookmarks.includes(calculator.slug) || res.bookmarks.includes(String(calculator.id));
-            setIsBookmarked(isSaved);
-          }
-        } catch (error) {
-          console.error("Bookmark fetch error", error);
-        }
-      };
-      checkBookmark();
-    }
-  }, [user, calculator.id, calculator.slug]);
-
   const registerSaveHandler = useCallback((handler: () => any) => {
     getCalculationDataHandler.current = handler;
   }, []);
@@ -126,30 +115,23 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     if (!hasPerformedCalculation) setHasPerformedCalculation(true);
   }, [hasPerformedCalculation]);
 
-  const handleBookmark = async () => {
-    if (!user) {
-      toast.error("Please log in to manage bookmarks.");
-      return;
-    }
-    const previousState = isBookmarked;
-    setIsBookmarked(!isBookmarked);
-
+  const handleDownloadReport = async () => {
+    if (!currentReport) return;
+    setIsDownloadingReport(true);
     try {
-      const res = await fetchAPI("/public/toggle_bookmark.php", {
-        method: "POST",
-        body: JSON.stringify({ userId: user.id, calculatorId: calculator.slug }),
-      });
-
-      if (res.success) {
-        toast.success(res.message);
-        setIsBookmarked(res.bookmarked);
-      } else {
-        setIsBookmarked(previousState);
-        toast.error(res.message);
-      }
+      const blob = await generateResultImage(currentReport);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${currentReport.fileNameBase}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      setIsBookmarked(previousState);
-      toast.error("Failed to update bookmark.");
+      toast.error("Could not generate the download. Please try again.");
+    } finally {
+      setIsDownloadingReport(false);
     }
   };
 
@@ -264,15 +246,15 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
               </button>
 
               <button
-                onClick={handleBookmark}
-                className={`p-2.5 rounded-xl border transition-all shadow-sm ${
-                  isBookmarked
-                    ? "bg-primary-50 border-primary-200 text-primary-600 dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-400"
-                    : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200"
-                }`}
-                title="Bookmark"
+                onClick={handleDownloadReport}
+                disabled={!currentReport || isDownloadingReport}
+                className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-500 disabled:hover:border-neutral-200"
+                title={currentReport ? "Download Result" : "Calculate a result first"}
               >
-                <SafeIcon icon={FiBookmark} className="w-5 h-5" />
+                <SafeIcon
+                  icon={isDownloadingReport ? FiLoader : FiDownload}
+                  className={`w-5 h-5 ${isDownloadingReport ? "animate-spin" : ""}`}
+                />
               </button>
 
               {user && (
@@ -329,7 +311,8 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
                 <div className="p-6 md:p-8">
                   {renderCalculatorComponent(calculator.slug, {
                       onRegisterSaveHandler: registerSaveHandler,
-                      onCalculationComplete: handleCalculationComplete
+                      onCalculationComplete: handleCalculationComplete,
+                      onReportChange: setCurrentReport
                   })}
                 </div>
                 

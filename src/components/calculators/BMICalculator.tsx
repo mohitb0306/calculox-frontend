@@ -1,15 +1,25 @@
 "use client";
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import SafeIcon from '@/components/common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 import { calculateBMI, getBMIRanges, validateBMIInput, validateWaistInput, calculateWaistMetrics, getBMIInsight, getGenderContextNote, generateBMIGrid, BMIUnit, BMIRegion } from '@/utils/calculators/bmiLogic';
+import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiActivity, FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiBarChart2, FiDownload, FiShare2, FiLoader, FiArrowDown } = FiIcons;
+const { FiActivity, FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiBarChart2, FiArrowDown } = FiIcons;
 
 interface BMICalculatorProps {
   onCalculationComplete?: () => void;
+  /**
+   * Fired whenever the current result changes — including becoming null when
+   * there is no shareable result (no calculation yet, a validation error, or
+   * the pregnancy safety disclaimer). A future header/toolbar component can
+   * use this to receive the report and pass it into generateResultImage /
+   * generateResultPdf without BMICalculator needing to know anything about
+   * where those download/share icons live.
+   */
+  onReportChange?: (report: ShareableReport | null) => void;
 }
 
 // --- DYNAMIC PREMIUM COLOR MAPPER ---
@@ -31,7 +41,7 @@ const getCategoryColors = (category: string) => {
   }
 };
 
-const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) => {
+const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange }) => {
   const prefersReducedMotion = useReducedMotion();
   
   // State
@@ -66,10 +76,6 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
   const [waistError, setWaistError] = useState<string | null>(null);
   const [ageError, setAgeError] = useState<string | null>(null);
 
-  // Step 5: Shareable result card (snapshot export, not a history feature)
-  const [isGeneratingCard, setIsGeneratingCard] = useState<boolean>(false);
-  const [shareCardError, setShareCardError] = useState<string | null>(null);
-
   // Step 8: visually links the gauge to its matching row in the Detailed
   // Classification table — a ref to scroll to, plus a brief highlight pulse.
   const activeClassificationRowRef = useRef<HTMLDivElement | null>(null);
@@ -101,7 +107,6 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
     setHeightError(null);
     setWaistError(null);
     setAgeError(null);
-    setShareCardError(null);
   };
 
   const handleClear = () => {
@@ -289,6 +294,70 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
     return generateBMIGrid(parseFloat(weight.toString()), activeHeight, unit, region);
   }, [hasCalculated, hasError, bmi, weight, activeHeight, unit, region]);
 
+  // --- STEP B: SHAREABLE REPORT (feeds the shared report engine) ---
+  // Builds a calculator-agnostic ShareableReport from this calculator's own
+  // state. This is the ONLY place BMICalculator talks to the report engine —
+  // it never draws pixels or PDF content itself; generateResultImage.ts and
+  // generateResultPdf.ts (used elsewhere, e.g. a future header/toolbar) do
+  // that from this object. null means "nothing shareable right now" (no
+  // calculation yet, a validation error, or the pregnancy disclaimer).
+  const report = useMemo<ShareableReport | null>(() => {
+    if (!hasCalculated || hasError || isPregnant) return null;
+
+    const colors = getCategoryColors(category);
+
+    const mainRows: Array<{ label: string; value: string }> = [
+      {
+        label: 'Ideal Weight Range',
+        value: idealWeight.max === 0 ? '--' : `${idealWeight.min.toFixed(1)} \u2013 ${idealWeight.max.toFixed(1)} ${unit === 'metric' ? 'kg' : 'lbs'}`,
+      },
+      { label: 'BMI Prime', value: bmiPrime === 0 ? '--' : bmiPrime.toFixed(2) },
+      { label: 'Ponderal Index', value: ponderalIndex === 0 ? '--' : `${ponderalIndex.toFixed(1)} kg/m\u00b3` },
+    ];
+
+    const sections: ShareableReport['sections'] = [{ rows: mainRows }];
+
+    if (whtrCategory || waistRiskLevel) {
+      const waistRows: Array<{ label: string; value: string }> = [];
+      if (whtrCategory) {
+        waistRows.push({ label: 'Waist-to-Height Ratio', value: `${whtr.toFixed(2)} (${whtrCategory})` });
+      }
+      if (waistRiskLevel) {
+        waistRows.push({ label: 'Waist Risk (WHO)', value: waistRiskLevel });
+      }
+      sections.push({ heading: 'Waist Metrics', rows: waistRows });
+    }
+
+    // Full Detailed Classification table (every band, not just the matched
+    // one) so the "Complete Report" PDF can show it in full, same as the
+    // on-page table.
+    const classificationRows = getBMIRanges(region).map((range) => ({
+      label: range.category,
+      value: range.category === category ? `${range.label} \u2014 Your Result` : range.label,
+    }));
+    sections.push({
+      heading: `Detailed Classification (${region === 'asia-pacific' ? 'Asia-Pacific' : 'WHO'})`,
+      rows: classificationRows,
+    });
+
+    return {
+      title: 'BMI Result',
+      headlineValue: bmi.toFixed(1),
+      headlineLabel: category,
+      accentColor: colors.hex,
+      meta: [region === 'who' ? 'WHO Standard' : 'Asia-Pacific Standard', unit === 'metric' ? 'Metric Units' : 'Imperial Units'],
+      sections,
+      disclaimer: 'For informational purposes only \u2014 not medical advice.',
+      fileNameBase: `bmi-result-${bmi.toFixed(1)}`,
+    };
+  }, [hasCalculated, hasError, isPregnant, bmi, category, idealWeight, bmiPrime, ponderalIndex, whtr, whtrCategory, waistRiskLevel, region, unit]);
+
+  // Tell a parent component (e.g. a future header/toolbar) about the current
+  // report whenever it changes, including changing to null.
+  useEffect(() => {
+    onReportChange?.(report);
+  }, [report, onReportChange]);
+
   const noSpinnerClass = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   const getWeightStatusSubtext = () => {
@@ -296,187 +365,6 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
     if (w > idealWeight.max) return "Consider an active, balanced routine.";
     if (w < idealWeight.min) return "Focus on nutrient-dense meals.";
     return "Keep up the excellent habits!";
-  };
-
-  // --- STEP 5: SHAREABLE RESULT CARD ---
-  // Pure client-side Canvas 2D rendering of the CURRENT calculation only — no
-  // external libraries, no backend, no persistence. Not a history/trend feature.
-  const generateResultCardBlob = (): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      if (typeof document === 'undefined') {
-        reject(new Error('Not available in this environment.'));
-        return;
-      }
-
-      const rows: Array<{ label: string; value: string }> = [
-        {
-          label: 'Ideal Weight Range',
-          value: idealWeight.max === 0 ? '--' : `${idealWeight.min.toFixed(1)} \u2013 ${idealWeight.max.toFixed(1)} ${unit === 'metric' ? 'kg' : 'lbs'}`,
-        },
-        { label: 'BMI Prime', value: bmiPrime === 0 ? '--' : bmiPrime.toFixed(2) },
-        { label: 'Ponderal Index', value: ponderalIndex === 0 ? '--' : `${ponderalIndex.toFixed(1)} kg/m\u00b3` },
-      ];
-      if (whtrCategory) {
-        rows.push({ label: 'Waist-to-Height Ratio', value: `${whtr.toFixed(2)} (${whtrCategory})` });
-      }
-      if (waistRiskLevel) {
-        rows.push({ label: 'Waist Risk (WHO)', value: waistRiskLevel });
-      }
-
-      const W = 1000;
-      const headerH = 300;
-      const rowH = 90;
-      const padTop = 60;
-      const padBottom = 130;
-      const H = headerH + padTop + rows.length * rowH + padBottom;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Canvas is not supported in this browser.'));
-        return;
-      }
-
-      const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r);
-        ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r);
-        ctx.closePath();
-      };
-
-      // Page background
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(0, 0, W, H);
-
-      // Outer card with soft shadow
-      ctx.save();
-      ctx.shadowColor = 'rgba(15, 23, 42, 0.15)';
-      ctx.shadowBlur = 40;
-      ctx.shadowOffsetY = 12;
-      roundRect(32, 32, W - 64, H - 64, 28);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.restore();
-
-      ctx.save();
-      roundRect(32, 32, W - 64, H - 64, 28);
-      ctx.clip();
-
-      // Header band in category color
-      ctx.fillStyle = currentColors.hex;
-      ctx.fillRect(32, 32, W - 64, headerH);
-
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.font = '700 24px system-ui, -apple-system, Segoe UI, sans-serif';
-      ctx.fillText('BMI RESULT', 72, 100);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '800 120px system-ui, -apple-system, Segoe UI, sans-serif';
-      ctx.fillText(bmi.toFixed(1), 68, 235);
-
-      ctx.font = '700 34px system-ui, -apple-system, Segoe UI, sans-serif';
-      ctx.fillText(category.toUpperCase(), 72, 285);
-
-      ctx.font = '600 22px system-ui, -apple-system, Segoe UI, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.fillText(region === 'who' ? 'WHO Standard' : 'Asia-Pacific Standard', W - 72, 100);
-      ctx.fillText(unit === 'metric' ? 'Metric Units' : 'Imperial Units', W - 72, 130);
-      ctx.textAlign = 'left';
-
-      // Metric rows
-      let y = headerH + padTop;
-      rows.forEach((row, i) => {
-        if (i > 0) {
-          ctx.strokeStyle = '#e5e7eb';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(72, y);
-          ctx.lineTo(W - 72, y);
-          ctx.stroke();
-        }
-        ctx.fillStyle = '#64748b';
-        ctx.font = '600 22px system-ui, -apple-system, Segoe UI, sans-serif';
-        ctx.fillText(row.label.toUpperCase(), 72, y + 40);
-
-        ctx.fillStyle = '#0f172a';
-        ctx.font = '700 30px system-ui, -apple-system, Segoe UI, sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText(row.value, W - 72, y + 44);
-        ctx.textAlign = 'left';
-
-        y += rowH;
-      });
-
-      // Footer disclaimer
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '500 18px system-ui, -apple-system, Segoe UI, sans-serif';
-      ctx.fillText('For informational purposes only \u2014 not medical advice.', 72, H - 76);
-      ctx.fillText(new Date().toLocaleDateString(), 72, H - 48);
-
-      ctx.restore();
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error('Could not generate the image.'));
-        }
-      }, 'image/png');
-    });
-  };
-
-  const handleDownloadResultCard = async () => {
-    setShareCardError(null);
-    setIsGeneratingCard(true);
-    try {
-      const blob = await generateResultCardBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bmi-result-${bmi.toFixed(1)}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      setShareCardError('Could not generate the image. Please try again.');
-    } finally {
-      setIsGeneratingCard(false);
-    }
-  };
-
-  const handleShareResultCard = async () => {
-    setShareCardError(null);
-    setIsGeneratingCard(true);
-    try {
-      const blob = await generateResultCardBlob();
-      const file = new File([blob], `bmi-result-${bmi.toFixed(1)}.png`, { type: 'image/png' });
-      const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
-      if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
-        await nav.share({ files: [file], title: 'My BMI Result' });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bmi-result-${bmi.toFixed(1)}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    } catch (err) {
-      if ((err as { name?: string })?.name !== 'AbortError') {
-        setShareCardError('Could not generate the image. Please try again.');
-      }
-    } finally {
-      setIsGeneratingCard(false);
-    }
   };
 
   const handleJumpToClassification = () => {
@@ -906,38 +794,6 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete }) 
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* SHAREABLE RESULT CARD ACTIONS (Step 5) */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={handleDownloadResultCard}
-                disabled={isGeneratingCard}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              >
-                <SafeIcon icon={isGeneratingCard ? FiLoader : FiDownload} className={`w-4 h-4 ${isGeneratingCard ? 'animate-spin' : ''}`} />
-                {isGeneratingCard ? 'Generating…' : 'Download Result Card'}
-              </button>
-              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
-                <button
-                  type="button"
-                  onClick={handleShareResultCard}
-                  disabled={isGeneratingCard}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                >
-                  <SafeIcon icon={FiShare2} className="w-4 h-4" />
-                  Share
-                </button>
-              )}
-            </div>
-            {shareCardError && (
-              <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-                <SafeIcon icon={FiAlertCircle} className="w-4 h-4 flex-shrink-0" />
-                {shareCardError}
-              </p>
-            )}
           </div>
 
           {/* DYNAMIC WELLNESS OVERVIEW CARD */}

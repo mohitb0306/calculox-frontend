@@ -255,8 +255,8 @@ export const getBMIInsight = (category: string, isAthletic: boolean): string => 
 };
 
 export const generateBMIGrid = (centerWeight: number, centerHeight: number, unit: BMIUnit, region: BMIRegion) => {
-  const weights = [];
-  const heights = [];
+  const weights: number[] = [];
+  const heights: number[] = [];
   
   const wStep = unit === 'metric' ? 5 : 10;
   const hStep = unit === 'metric' ? 3 : 2;

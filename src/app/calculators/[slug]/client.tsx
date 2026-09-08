@@ -12,6 +12,7 @@ import Breadcrumbs from "@/components/seo/Breadcrumbs";
 import { normalizeHtml } from "@/lib/utils";
 import RichTextRenderer from "@/components/common/RichTextRenderer"; // <-- ADDED INTERCEPTOR
 import { generateResultImage } from "@/lib/reports/generateResultImage";
+import { generateResultPdf } from "@/lib/reports/generateResultPdf";
 import type { ShareableReport } from "@/lib/reports/types";
 
 // Data
@@ -21,7 +22,7 @@ import { getVisuals } from "@/data/calculatorData";
 const {
   FiArrowLeft, FiShare2, FiSave, FiCheck, FiDownload, FiLoader,
   FiChevronDown, FiChevronUp, FiTag, FiUser, FiCpu,
-  FiClock
+  FiClock, FiImage, FiFileText
 } = FiIcons;
 
 interface ClientProps {
@@ -86,6 +87,8 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   // null means there's nothing to download yet.
   const [currentReport, setCurrentReport] = useState<ShareableReport | null>(null);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   
   const getCalculationDataHandler = useRef<(() => any) | null>(null);
 
@@ -111,19 +114,36 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     getCalculationDataHandler.current = handler;
   }, []);
 
+  // Closes the "Download as..." menu when the person clicks anywhere else
+  // on the page.
+  useEffect(() => {
+    if (!isDownloadMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
+        setIsDownloadMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isDownloadMenuOpen]);
+
   const handleCalculationComplete = useCallback(() => {
     if (!hasPerformedCalculation) setHasPerformedCalculation(true);
   }, [hasPerformedCalculation]);
 
-  const handleDownloadReport = async () => {
+  const handleDownloadReport = async (format: "image" | "pdf") => {
     if (!currentReport) return;
+    setIsDownloadMenuOpen(false);
     setIsDownloadingReport(true);
     try {
-      const blob = await generateResultImage(currentReport);
+      const blob = format === "image"
+        ? await generateResultImage(currentReport)
+        : await generateResultPdf(currentReport);
+      const extension = format === "image" ? "png" : "pdf";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${currentReport.fileNameBase}.png`;
+      a.download = `${currentReport.fileNameBase}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -245,17 +265,52 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
                 <SafeIcon icon={FiShare2} className="w-5 h-5" />
               </button>
 
-              <button
-                onClick={handleDownloadReport}
-                disabled={!currentReport || isDownloadingReport}
-                className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-500 disabled:hover:border-neutral-200"
-                title={currentReport ? "Download Result" : "Calculate a result first"}
-              >
-                <SafeIcon
-                  icon={isDownloadingReport ? FiLoader : FiDownload}
-                  className={`w-5 h-5 ${isDownloadingReport ? "animate-spin" : ""}`}
-                />
-              </button>
+              <div className="relative" ref={downloadMenuRef}>
+                <button
+                  onClick={() => currentReport && setIsDownloadMenuOpen((open) => !open)}
+                  disabled={!currentReport || isDownloadingReport}
+                  className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-500 disabled:hover:border-neutral-200"
+                  title={currentReport ? "Download Result" : "Calculate a result first"}
+                >
+                  <SafeIcon
+                    icon={isDownloadingReport ? FiLoader : FiDownload}
+                    className={`w-5 h-5 ${isDownloadingReport ? "animate-spin" : ""}`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {isDownloadMenuOpen && currentReport && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg overflow-hidden z-20"
+                    >
+                      <button
+                        onClick={() => handleDownloadReport("image")}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-left"
+                      >
+                        <SafeIcon icon={FiImage} className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          Download as Image
+                          <span className="block text-xs font-normal text-neutral-400">Quick share-friendly picture</span>
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadReport("pdf")}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-left border-t border-neutral-100 dark:border-neutral-700"
+                      >
+                        <SafeIcon icon={FiFileText} className="w-4 h-4 text-neutral-400" />
+                        <span>
+                          Download as PDF
+                          <span className="block text-xs font-normal text-neutral-400">Full printable report</span>
+                        </span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {user && (
                  <button

@@ -340,6 +340,24 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       rows: classificationRows,
     });
 
+    // "Your Inputs" recap — PDF ("Complete Report") only, never in the quick
+    // shareable image. Mirrors exactly what was typed into the form.
+    const inputRows: Array<{ label: string; value: string }> = [
+      { label: 'Age', value: `${age} years` },
+      { label: 'Biological Sex', value: gender === 'male' ? 'Male' : 'Female' },
+      { label: 'Athletic Build', value: isAthletic ? 'Yes' : 'No' },
+      {
+        label: 'Height',
+        value: unit === 'metric' ? `${height} cm` : `${heightFt}' ${heightIn}"`,
+      },
+      { label: 'Weight', value: `${weight} ${unit === 'metric' ? 'kg' : 'lbs'}` },
+    ];
+    const wc = parseFloat(waist.toString());
+    if (!Number.isNaN(wc) && wc > 0) {
+      inputRows.push({ label: 'Waist Circumference', value: `${waist} ${unit === 'metric' ? 'cm' : 'in'}` });
+    }
+    const pdfOnlySections: ShareableReport['sections'] = [{ heading: 'Your Inputs', rows: inputRows }];
+
     return {
       title: 'BMI Result',
       headlineValue: bmi.toFixed(1),
@@ -347,10 +365,11 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       accentColor: colors.hex,
       meta: [region === 'who' ? 'WHO Standard' : 'Asia-Pacific Standard', unit === 'metric' ? 'Metric Units' : 'Imperial Units'],
       sections,
+      pdfOnlySections,
       disclaimer: 'For informational purposes only \u2014 not medical advice.',
       fileNameBase: `bmi-result-${bmi.toFixed(1)}`,
     };
-  }, [hasCalculated, hasError, isPregnant, bmi, category, idealWeight, bmiPrime, ponderalIndex, whtr, whtrCategory, waistRiskLevel, region, unit]);
+  }, [hasCalculated, hasError, isPregnant, bmi, category, idealWeight, bmiPrime, ponderalIndex, whtr, whtrCategory, waistRiskLevel, region, unit, age, gender, isAthletic, height, heightFt, heightIn, weight, waist]);
 
   // Tell a parent component (e.g. a future header/toolbar) about the current
   // report whenever it changes, including changing to null.

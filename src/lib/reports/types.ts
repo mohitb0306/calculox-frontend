@@ -33,6 +33,13 @@ export interface ShareableReport {
   meta?: string[];
   /** One or more groups of label/value rows, rendered in order */
   sections: ReportSection[];
+  /**
+   * Optional extra sections that appear ONLY in the PDF ("Complete Report"),
+   * never in the quick shareable PNG image — e.g. a "Your Inputs" section.
+   * Rendered after `sections`, in the same label/value row style. Omit this
+   * field entirely for calculators that don't need an inputs recap.
+   */
+  pdfOnlySections?: ReportSection[];
   /** Optional footer disclaimer, e.g. "For informational purposes only — not medical advice." */
   disclaimer?: string;
   /** Filename stem (no extension) used for both downloads, e.g. "bmi-result" */

@@ -59,7 +59,9 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
 
       drawHeader();
 
-      report.sections.forEach((section) => {
+      const allSections = [...report.sections, ...(report.pdfOnlySections ?? [])];
+
+      allSections.forEach((section) => {
         if (y > PAGE_H - ROW_BOTTOM_MARGIN) addPage();
 
         if (section.heading) {

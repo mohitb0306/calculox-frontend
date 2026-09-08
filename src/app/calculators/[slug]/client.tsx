@@ -131,14 +131,26 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     if (!hasPerformedCalculation) setHasPerformedCalculation(true);
   }, [hasPerformedCalculation]);
 
+  // A tiny artificial pause before the file is handed over. Generating the
+  // image/PDF is usually instant, which can feel abrupt or "broken" — a
+  // short guaranteed minimum wait (with the spinner visible) feels more like
+  // a real, deliberate process being completed. PDFs get a touch longer
+  // since they're the more "substantial" document.
+  const withMinimumDelay = <T,>(promise: Promise<T>, minMs: number): Promise<T> => {
+    return Promise.all([promise, new Promise((resolve) => setTimeout(resolve, minMs))])
+      .then(([result]) => result);
+  };
+
   const handleDownloadReport = async (format: "image" | "pdf") => {
     if (!currentReport) return;
     setIsDownloadMenuOpen(false);
     setIsDownloadingReport(true);
     try {
-      const blob = format === "image"
-        ? await generateResultImage(currentReport)
-        : await generateResultPdf(currentReport);
+      const minDelayMs = format === "image" ? 600 : 900;
+      const blob = await withMinimumDelay(
+        format === "image" ? generateResultImage(currentReport) : generateResultPdf(currentReport),
+        minDelayMs
+      );
       const extension = format === "image" ? "png" : "pdf";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

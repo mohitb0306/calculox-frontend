@@ -20,7 +20,7 @@ import { CalculatorContent } from "@/lib/content";
 import { getVisuals } from "@/data/calculatorData";
 
 const {
-  FiArrowLeft, FiShare2, FiSave, FiCheck, FiDownload, FiLoader,
+  FiArrowLeft, FiSave, FiCheck, FiLoader,
   FiChevronDown, FiChevronUp, FiTag, FiUser, FiCpu,
   FiClock, FiImage, FiFileText
 } = FiIcons;
@@ -86,9 +86,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   // future calculator, reports this up via the generic onReportChange prop).
   // null means there's nothing to download yet.
   const [currentReport, setCurrentReport] = useState<ShareableReport | null>(null);
-  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
-  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
-  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
+  const [downloadingFormat, setDownloadingFormat] = useState<"image" | "pdf" | null>(null);
   
   const getCalculationDataHandler = useRef<(() => any) | null>(null);
 
@@ -114,19 +112,6 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     getCalculationDataHandler.current = handler;
   }, []);
 
-  // Closes the "Download as..." menu when the person clicks anywhere else
-  // on the page.
-  useEffect(() => {
-    if (!isDownloadMenuOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
-        setIsDownloadMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isDownloadMenuOpen]);
-
   const handleCalculationComplete = useCallback(() => {
     if (!hasPerformedCalculation) setHasPerformedCalculation(true);
   }, [hasPerformedCalculation]);
@@ -142,9 +127,8 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   };
 
   const handleDownloadReport = async (format: "image" | "pdf") => {
-    if (!currentReport) return;
-    setIsDownloadMenuOpen(false);
-    setIsDownloadingReport(true);
+    if (!currentReport || downloadingFormat) return;
+    setDownloadingFormat(format);
     try {
       const minDelayMs = format === "image" ? 600 : 900;
       const blob = await withMinimumDelay(
@@ -163,7 +147,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     } catch (error) {
       toast.error("Could not generate the download. Please try again.");
     } finally {
-      setIsDownloadingReport(false);
+      setDownloadingFormat(null);
     }
   };
 
@@ -206,19 +190,6 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
       }
     } else {
       toast.error("This calculator is not yet configured for saving.");
-    }
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: calculator.name,
-        text: calculator.description,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied to clipboard");
     }
   };
 
@@ -269,60 +240,31 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
             </Link>
             
             <div className="flex items-center gap-3">
-              <button 
-                onClick={handleShare} 
-                className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm"
-                title="Share"
+              <button
+                onClick={() => handleDownloadReport("image")}
+                disabled={!currentReport || downloadingFormat !== null}
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200"
+                title={currentReport ? "Download as PNG image" : "Calculate a result first"}
               >
-                <SafeIcon icon={FiShare2} className="w-5 h-5" />
+                <SafeIcon
+                  icon={downloadingFormat === "image" ? FiLoader : FiImage}
+                  className={`w-5 h-5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
+                />
+                <span className="text-sm font-bold">PNG</span>
               </button>
 
-              <div className="relative" ref={downloadMenuRef}>
-                <button
-                  onClick={() => currentReport && setIsDownloadMenuOpen((open) => !open)}
-                  disabled={!currentReport || isDownloadingReport}
-                  className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-500 disabled:hover:border-neutral-200"
-                  title={currentReport ? "Download Result" : "Calculate a result first"}
-                >
-                  <SafeIcon
-                    icon={isDownloadingReport ? FiLoader : FiDownload}
-                    className={`w-5 h-5 ${isDownloadingReport ? "animate-spin" : ""}`}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {isDownloadMenuOpen && currentReport && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg overflow-hidden z-20"
-                    >
-                      <button
-                        onClick={() => handleDownloadReport("image")}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-left"
-                      >
-                        <SafeIcon icon={FiImage} className="w-4 h-4 text-neutral-400" />
-                        <span>
-                          Download as Image
-                          <span className="block text-xs font-normal text-neutral-400">Quick share-friendly picture</span>
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleDownloadReport("pdf")}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors text-left border-t border-neutral-100 dark:border-neutral-700"
-                      >
-                        <SafeIcon icon={FiFileText} className="w-4 h-4 text-neutral-400" />
-                        <span>
-                          Download as PDF
-                          <span className="block text-xs font-normal text-neutral-400">Full printable report</span>
-                        </span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <button
+                onClick={() => handleDownloadReport("pdf")}
+                disabled={!currentReport || downloadingFormat !== null}
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200"
+                title={currentReport ? "Download as PDF report" : "Calculate a result first"}
+              >
+                <SafeIcon
+                  icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
+                  className={`w-5 h-5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
+                />
+                <span className="text-sm font-bold">PDF</span>
+              </button>
 
               {user && (
                  <button

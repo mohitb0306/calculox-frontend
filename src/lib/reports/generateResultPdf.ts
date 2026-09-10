@@ -41,6 +41,27 @@ const tint = ([r, g, b]: [number, number, number], factor: number): [number, num
 
 const SLATE: [number, number, number] = [100, 116, 139]; // neutral "input" base color
 
+/**
+ * jsPDF's built-in fonts (Helvetica/Times/Courier) only embed the WinAnsi
+ * character set — a Latin-1-ish range. Common math/typographic symbols like
+ * "≥" or "≤" fall outside it and render as garbled glyphs instead of text
+ * (e.g. a BMI label of "≥ 40.0" printing as '"e 40.0'). Since any current or
+ * future calculator's labels can contain these, sanitize every string drawn
+ * to the PDF through this one map rather than special-casing BMI.
+ */
+const PDF_SAFE_REPLACEMENTS: Record<string, string> = {
+  '\u2265': '>=', // ≥
+  '\u2264': '<=', // ≤
+  '\u2260': '!=', // ≠
+  '\u2212': '-',  // − (minus sign, distinct from hyphen)
+  '\u2192': '->', // →
+  '\u2190': '<-', // ←
+  '\u00b1': '+/-',// ± (safe in WinAnsi too, but normalized for consistency)
+};
+
+const pdfSafe = (text: string): string =>
+  text.replace(/[\u2265\u2264\u2260\u2212\u2192\u2190\u00b1]/g, (ch) => PDF_SAFE_REPLACEMENTS[ch] ?? ch);
+
 export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     try {
@@ -56,19 +77,19 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(11);
-        doc.text(report.title.toUpperCase(), MARGIN, 34);
+        doc.text(pdfSafe(report.title.toUpperCase()), MARGIN, 34);
 
         doc.setFontSize(40);
-        doc.text(report.headlineValue, MARGIN, 82);
+        doc.text(pdfSafe(report.headlineValue), MARGIN, 82);
 
         doc.setFontSize(16);
-        doc.text(report.headlineLabel.toUpperCase(), MARGIN, 106);
+        doc.text(pdfSafe(report.headlineLabel.toUpperCase()), MARGIN, 106);
 
         if (report.meta?.length) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
           report.meta.slice(0, 3).forEach((line, i) => {
-            doc.text(line, PAGE_W - MARGIN, 34 + i * 14, { align: 'right' });
+            doc.text(pdfSafe(line), PAGE_W - MARGIN, 34 + i * 14, { align: 'right' });
           });
         }
       };
@@ -128,7 +149,7 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
         doc.setFontSize(12);
         doc.setTextColor(...palette.heading);
         doc.text(
-          heading.toUpperCase(),
+          pdfSafe(heading.toUpperCase()),
           MARGIN + contentW - CARD_PADDING,
           topY + CARD_PADDING + TAG_H - 4.5,
           { align: 'right' }
@@ -145,12 +166,12 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(row.label, MARGIN + CARD_PADDING, textY);
+        doc.text(pdfSafe(row.label), MARGIN + CARD_PADDING, textY);
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10.5);
         doc.setTextColor(15, 23, 42);
-        doc.text(row.value, MARGIN + contentW - CARD_PADDING, textY, { align: 'right' });
+        doc.text(pdfSafe(row.value), MARGIN + contentW - CARD_PADDING, textY, { align: 'right' });
       };
 
       // Draws a section as one or more cards, splitting across pages only
@@ -232,7 +253,7 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
         doc.setFontSize(9);
         doc.setTextColor(148, 163, 184);
         if (report.disclaimer) {
-          doc.text(report.disclaimer, MARGIN, PAGE_H - 40);
+          doc.text(pdfSafe(report.disclaimer), MARGIN, PAGE_H - 40);
         }
         doc.text(new Date().toLocaleDateString(), MARGIN, PAGE_H - 26);
         doc.text(`Page ${i} of ${pageCount}`, PAGE_W - MARGIN, PAGE_H - 26, { align: 'right' });

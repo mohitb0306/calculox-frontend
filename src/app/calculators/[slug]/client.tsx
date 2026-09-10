@@ -240,6 +240,10 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
             </Link>
             
             <div className="flex items-center gap-3">
+              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mr-0.5">
+                Download Result
+              </span>
+
               <button
                 onClick={() => handleDownloadReport("image")}
                 disabled={!currentReport || downloadingFormat !== null}

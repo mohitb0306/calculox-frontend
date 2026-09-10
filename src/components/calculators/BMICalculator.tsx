@@ -315,7 +315,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       { label: 'Ponderal Index', value: ponderalIndex === 0 ? '--' : `${ponderalIndex.toFixed(1)} kg/m\u00b3` },
     ];
 
-    const sections: ShareableReport['sections'] = [{ rows: mainRows }];
+    const sections: ShareableReport['sections'] = [{ heading: 'Key Results', rows: mainRows }];
 
     if (whtrCategory || waistRiskLevel) {
       const waistRows: Array<{ label: string; value: string }> = [];

@@ -131,8 +131,12 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     setDownloadingFormat(format);
     try {
       const minDelayMs = format === "image" ? 600 : 900;
+      const siteInfo = {
+        name: settings?.siteName || "Calculox",
+        url: (process.env.NEXT_PUBLIC_APP_URL || "https://calculox.com").replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      };
       const blob = await withMinimumDelay(
-        format === "image" ? generateResultImage(currentReport) : generateResultPdf(currentReport),
+        format === "image" ? generateResultImage(currentReport, siteInfo) : generateResultPdf(currentReport, siteInfo),
         minDelayMs
       );
       const extension = format === "image" ? "png" : "pdf";

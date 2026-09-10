@@ -61,27 +61,31 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
 
       const allSections = [...(report.pdfOnlySections ?? []), ...report.sections];
 
+      const drawSectionHeading = (text: string) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(15, 23, 42);
+        doc.text(text.toUpperCase(), MARGIN, y);
+        y += 24;
+      };
+
       allSections.forEach((section) => {
-        // Look ahead: does this WHOLE section (heading + all its rows) fit
-        // on what's left of the current page? If not, start a fresh page
-        // for the whole section instead of letting it split mid-way with an
-        // orphaned heading on one page and headless rows on the next.
-        const estimatedSectionHeight = (section.heading ? 24 : 0) + section.rows.length * 36 + 16;
-        const isAtTopOfFreshPage = y <= HEADER_H + 40 + 1;
-        if (!isAtTopOfFreshPage && y + estimatedSectionHeight > PAGE_H - ROW_BOTTOM_MARGIN) {
-          addPage();
-        }
+        if (y > PAGE_H - ROW_BOTTOM_MARGIN) addPage();
 
         if (section.heading) {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(13);
-          doc.setTextColor(15, 23, 42);
-          doc.text(section.heading.toUpperCase(), MARGIN, y);
-          y += 24;
+          drawSectionHeading(section.heading);
         }
 
         section.rows.forEach((row) => {
-          if (y > PAGE_H - ROW_BOTTOM_MARGIN) addPage();
+          if (y > PAGE_H - ROW_BOTTOM_MARGIN) {
+            addPage();
+            // A section that spills onto a new page repeats its heading
+            // (marked "continued") instead of leaving headless rows
+            // floating with no context on the new page.
+            if (section.heading) {
+              drawSectionHeading(`${section.heading} (Continued)`);
+            }
+          }
 
           doc.setDrawColor(226, 232, 240);
           doc.line(MARGIN, y, PAGE_W - MARGIN, y);

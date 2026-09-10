@@ -18,6 +18,13 @@ export interface ReportSection {
   /** Optional sub-heading above this group of rows, e.g. "Waist Metrics" */
   heading?: string;
   rows: ReportRow[];
+  /**
+   * Visual category for card-based renderers (currently the PDF only).
+   * 'input'  -> neutral/slate card, tagged "INPUT" — what the user typed in.
+   * 'output' -> accent-tinted card, tagged "RESULT" — calculated values.
+   * Defaults to 'output' when omitted.
+   */
+  variant?: 'input' | 'output';
 }
 
 export interface ShareableReport {

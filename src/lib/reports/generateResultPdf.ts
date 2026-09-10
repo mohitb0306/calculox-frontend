@@ -59,10 +59,18 @@ export const generateResultPdf = (report: ShareableReport): Promise<Blob> => {
 
       drawHeader();
 
-      const allSections = [...report.sections, ...(report.pdfOnlySections ?? [])];
+      const allSections = [...(report.pdfOnlySections ?? []), ...report.sections];
 
       allSections.forEach((section) => {
-        if (y > PAGE_H - ROW_BOTTOM_MARGIN) addPage();
+        // Look ahead: does this WHOLE section (heading + all its rows) fit
+        // on what's left of the current page? If not, start a fresh page
+        // for the whole section instead of letting it split mid-way with an
+        // orphaned heading on one page and headless rows on the next.
+        const estimatedSectionHeight = (section.heading ? 24 : 0) + section.rows.length * 36 + 16;
+        const isAtTopOfFreshPage = y <= HEADER_H + 40 + 1;
+        if (!isAtTopOfFreshPage && y + estimatedSectionHeight > PAGE_H - ROW_BOTTOM_MARGIN) {
+          addPage();
+        }
 
         if (section.heading) {
           doc.setFont('helvetica', 'bold');

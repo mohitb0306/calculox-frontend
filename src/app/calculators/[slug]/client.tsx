@@ -20,8 +20,8 @@ import { CalculatorContent } from "@/lib/content";
 import { getVisuals } from "@/data/calculatorData";
 
 const {
-  FiArrowLeft, FiSave, FiCheck, FiLoader,
-  FiChevronDown, FiChevronUp, FiTag, FiUser, FiCpu,
+  FiSave, FiCheck, FiLoader,
+  FiChevronDown, FiChevronUp, FiTag, FiCpu,
   FiClock, FiImage, FiFileText
 } = FiIcons;
 
@@ -73,7 +73,6 @@ const FaqItem = ({ faq }: { faq: any }) => {
 export default function CalculatorClientPage({ calculator, allCalculators, settings }: ClientProps) {
   // --- FIX: Stubbed user state for public frontend (resolves AuthContext missing module) ---
   const user: any = null;
-  const isLoading = false;
 
   // We use this state to hold the full data fetched client-side (including tags/faq which might be lazy loaded or structure differently)
   // However, since we pass 'calculator' prop from server, we initialize with it.
@@ -232,17 +231,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
 
         {/* Header */}
         <div className="mb-10">
-          <div className="flex items-center justify-between mb-6">
-            <Link
-              href="/calculators"
-              className="group flex items-center space-x-2 text-sm font-medium text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors"
-            >
-              <div className="p-1.5 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 group-hover:border-primary-500 dark:group-hover:border-primary-500 transition-colors">
-                <SafeIcon icon={FiArrowLeft} className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-              </div>
-              <span>Back to Calculators</span>
-            </Link>
-            
+          <div className="flex items-center justify-end mb-6">
             <div className="flex items-center gap-3">
               <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mr-0.5">
                 Download Result
@@ -256,7 +245,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
               >
                 <SafeIcon
                   icon={downloadingFormat === "image" ? FiLoader : FiImage}
-                  className={`w-5 h-5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
                 />
                 <span className="text-sm font-bold">PNG</span>
               </button>
@@ -269,7 +258,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
               >
                 <SafeIcon
                   icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
-                  className={`w-5 h-5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
                 />
                 <span className="text-sm font-bold">PDF</span>
               </button>
@@ -294,17 +283,17 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
             </div>
           </div>
 
-          <div className="flex items-start md:items-center space-x-6">
-            <div className={`w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br ${currentVisuals.color} flex items-center justify-center shadow-lg shadow-primary-500/20 shrink-0`}>
+          <div className="flex items-start md:items-center space-x-3 sm:space-x-4 md:space-x-5">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl bg-gradient-to-br ${currentVisuals.color} flex items-center justify-center shadow-lg shadow-primary-500/20 shrink-0`}>
               <SafeIcon
                 icon={currentVisuals.icon}
-                className="w-10 h-10 md:w-12 md:h-12 text-white"
+                className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 text-white"
               />
             </div>
             
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                 <h1 className="text-3xl md:text-4xl font-extrabold text-neutral-900 dark:text-white tracking-tight">
+                 <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-neutral-900 dark:text-white tracking-tight">
                     {calculator.name}
                  </h1>
                  {calculator.is_featured && (
@@ -411,27 +400,9 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
               </div>
             </div>
 
-            {!user && !isLoading && (
-              <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-white dark:from-indigo-900/20 dark:via-blue-900/10 dark:to-neutral-800 rounded-2xl p-6 border border-indigo-100 dark:border-indigo-800/50 shadow-sm relative overflow-hidden animate-fade-in">
-                <div className="relative z-10 text-center">
-                    <div className="w-12 h-12 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md ring-4 ring-indigo-50 dark:ring-indigo-900/40">
-                        <SafeIcon icon={FiUser} className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-2">
-                    Save Your Work
-                    </h3>
-                    <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6 leading-relaxed">
-                    Create a free account to save calculation history, bookmark favorite tools, and access premium features.
-                    </p>
-                    <Link
-                    href="/login"
-                    className="block w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transform hover:-translate-y-0.5"
-                    >
-                    Sign In / Register
-                    </Link>
-                </div>
-              </div>
-            )}
+            {/* Note: no account/login system exists yet, so no "sign in to save"
+                prompt is shown here. Re-add a similar block here if that
+                feature ships later. */}
           </div>
         </div>
       </div>

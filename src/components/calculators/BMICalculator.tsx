@@ -693,7 +693,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="flex flex-col items-center text-center py-14 px-4 sm:px-5 md:px-6 rounded-3xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/20"
+          className="flex flex-col items-center text-center py-14 px-6 rounded-3xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/20"
         >
           <svg width="120" height="80" viewBox="0 0 120 80" fill="none" aria-hidden="true" className="text-neutral-300 dark:text-neutral-600">
             <path d="M10 70a50 50 0 0 1 100 0" stroke="currentColor" strokeWidth="8" strokeLinecap="round" />
@@ -1085,7 +1085,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       )}
 
       {/* Concise Legal/Medical Disclaimer */}
-      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 p-4 sm:p-5 md:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-3 mt-8">
+      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-3 mt-8">
         <p className="leading-relaxed">
           <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This BMI calculator provides a general guide, not medical advice. BMI does not account for muscle mass, age, or ethnic differences; highly muscular individuals may be falsely classified as overweight. Always consult a healthcare professional before altering your diet or lifestyle.
         </p>

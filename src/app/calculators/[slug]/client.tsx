@@ -325,7 +325,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
           
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-neutral-200/50 dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-                <div className="p-6 md:p-8">
+                <div className="p-4 sm:p-6 md:p-8">
                   {renderCalculatorComponent(calculator.slug, {
                       onRegisterSaveHandler: registerSaveHandler,
                       onCalculationComplete: handleCalculationComplete,

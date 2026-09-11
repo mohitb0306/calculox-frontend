@@ -315,7 +315,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       { label: 'Ponderal Index', value: ponderalIndex === 0 ? '--' : `${ponderalIndex.toFixed(1)} kg/m\u00b3` },
     ];
 
-    const sections: ShareableReport['sections'] = [{ heading: 'Key Results', rows: mainRows }];
+    const sections: ShareableReport['sections'] = [{ heading: 'Key Results', rows: mainRows, variant: 'output' }];
 
     if (whtrCategory || waistRiskLevel) {
       const waistRows: Array<{ label: string; value: string }> = [];
@@ -325,7 +325,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       if (waistRiskLevel) {
         waistRows.push({ label: 'Waist Risk (WHO)', value: waistRiskLevel });
       }
-      sections.push({ heading: 'Waist Metrics', rows: waistRows });
+      sections.push({ heading: 'Waist Metrics', rows: waistRows, variant: 'output' });
     }
 
     // Full Detailed Classification table (every band, not just the matched
@@ -338,6 +338,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     sections.push({
       heading: `Detailed Classification (${region === 'asia-pacific' ? 'Asia-Pacific' : 'WHO'})`,
       rows: classificationRows,
+      variant: 'output',
     });
 
     // "Your Inputs" recap — PDF ("Complete Report") only, never in the quick
@@ -356,7 +357,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     if (!Number.isNaN(wc) && wc > 0) {
       inputRows.push({ label: 'Waist Circumference', value: `${waist} ${unit === 'metric' ? 'cm' : 'in'}` });
     }
-    const pdfOnlySections: ShareableReport['sections'] = [{ heading: 'Your Inputs', rows: inputRows }];
+    const pdfOnlySections: ShareableReport['sections'] = [{ heading: 'Your Inputs', rows: inputRows, variant: 'input' }];
 
     return {
       title: 'BMI Result',
@@ -719,7 +720,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           className="space-y-6 pt-4"
         >
           {isPregnant ? (
-            <div className="bg-white dark:bg-neutral-800 rounded-3xl p-6 md:p-8 border border-rose-200 dark:border-rose-900/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] flex flex-col md:flex-row items-start gap-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-3xl p-5 sm:p-6 md:p-8 border border-rose-200 dark:border-rose-900/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] flex flex-col md:flex-row items-start gap-4">
               <div className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-50 dark:bg-rose-900/20 shadow-sm border border-rose-100 dark:border-rose-900/40 text-rose-600 dark:text-rose-400">
                 <SafeIcon icon={FiHeart} className="w-6 h-6" />
               </div>
@@ -739,7 +740,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           ) : (
           <>
           {/* ELITE 4K SVG GAUGE & OVERLAY (Compact Profile) */}
-          <div className="bg-white dark:bg-neutral-800 rounded-3xl p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] relative overflow-hidden flex flex-col items-center">
+          <div className="bg-white dark:bg-neutral-800 rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] relative overflow-hidden flex flex-col items-center">
             
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 opacity-20 blur-[80px] rounded-full pointer-events-none transition-colors duration-700 ${currentColors.bg}`} />
 
@@ -816,7 +817,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           </div>
 
           {/* DYNAMIC WELLNESS OVERVIEW CARD */}
-          <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md group">
+          <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md group">
             <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-300 ${currentColors.bg}`} />
             <div className="relative z-10 flex flex-col md:flex-row items-start gap-4">
               <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 ${currentColors.text}`}>
@@ -836,7 +837,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
 
           {/* PREMIUM RESULTS CARDS (UNIFIED STYLING) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-purple-500 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-purple-600 dark:text-purple-400">
@@ -856,7 +857,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               </div>
             </div>
 
-            <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-teal-500 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-teal-600 dark:text-teal-400">
@@ -881,7 +882,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
 
           {/* SECONDARY METRICS: BMI PRIME & PONDERAL INDEX */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-sky-500 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-sky-600 dark:text-sky-400">
@@ -900,7 +901,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               </div>
             </div>
 
-            <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500 transition-opacity" />
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-amber-600 dark:text-amber-400">
@@ -924,7 +925,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           {/* WAIST-TO-HEIGHT RATIO & WHO WAIST-RISK (only shown when waist was provided) */}
           {whtrCategory && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+              <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
                 <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${
                   whtrCategory === 'High risk' ? 'bg-red-500' : whtrCategory === 'Increased risk' ? 'bg-yellow-500' : 'bg-green-500'
                 }`} />
@@ -947,7 +948,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-3xl p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
+              <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
                 <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${
                   waistRiskLevel === 'Substantially increased risk' ? 'bg-red-500' : waistRiskLevel === 'Increased risk' ? 'bg-yellow-500' : 'bg-green-500'
                 }`} />
@@ -1031,7 +1032,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           
           {/* REFINED CATEGORY TABLE */}
           <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden">
-            <div className="p-6 md:p-8 border-b border-neutral-100 dark:border-neutral-700/50 bg-neutral-50 dark:bg-neutral-800/30">
+            <div className="p-5 sm:p-6 md:p-8 border-b border-neutral-100 dark:border-neutral-700/50 bg-neutral-50 dark:bg-neutral-800/30">
               <h3 className="text-xl font-extrabold text-neutral-900 dark:text-white">
                 Detailed Classification {region === 'asia-pacific' ? '(Asia-Pacific)' : '(WHO)'}
               </h3>

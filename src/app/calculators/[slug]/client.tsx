@@ -223,7 +223,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         
         {/* Dynamic Breadcrumbs */}
         <div className="mb-6">
@@ -325,7 +325,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
           
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white dark:bg-neutral-800 rounded-2xl shadow-xl shadow-neutral-200/50 dark:shadow-none border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-                <div className="p-4 sm:p-6 md:p-8">
+                <div className="p-3 sm:p-6 md:p-8">
                   {renderCalculatorComponent(calculator.slug, {
                       onRegisterSaveHandler: registerSaveHandler,
                       onCalculationComplete: handleCalculationComplete,

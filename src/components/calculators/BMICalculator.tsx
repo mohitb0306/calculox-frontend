@@ -7,7 +7,7 @@ import * as FiIcons from 'react-icons/fi';
 import { calculateBMI, getBMIRanges, validateBMIInput, validateWaistInput, calculateWaistMetrics, getBMIInsight, getGenderContextNote, generateBMIGrid, BMIUnit, BMIRegion } from '@/utils/calculators/bmiLogic';
 import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiActivity, FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiBarChart2, FiArrowDown } = FiIcons;
+const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2 } = FiIcons;
 
 interface BMICalculatorProps {
   onCalculationComplete?: () => void;
@@ -39,6 +39,174 @@ const getCategoryColors = (category: string) => {
     case 'Obese Class III': return { text: 'text-rose-700 dark:text-rose-500', bg: 'bg-rose-600', grad: 'from-rose-50 to-rose-100 dark:from-rose-900/20 dark:to-rose-800/20 border-rose-200 dark:border-rose-800', border: 'border-rose-500 dark:border-rose-400', bgLight: 'bg-rose-50 dark:bg-rose-900/20', shadow: 'shadow-rose-500/10', hex: '#be123c' };
     default: return { text: 'text-neutral-600 dark:text-neutral-400', bg: 'bg-neutral-500', grad: 'from-neutral-50 to-neutral-100 dark:from-neutral-900/20 dark:to-neutral-800/20 border-neutral-200 dark:border-neutral-800', border: 'border-neutral-500 dark:border-neutral-400', bgLight: 'bg-neutral-50 dark:bg-neutral-900/20', shadow: 'shadow-neutral-500/10', hex: '#737373' };
   }
+};
+
+// --- RISK BADGE COLOR MAPPER ---
+// Used for the WHtR / Waist Risk chips in "Additional Metrics". Kept
+// independent of getCategoryColors (BMI category) since these describe a
+// distinct risk scale, not the BMI band itself. Returns a tinted
+// background + colored text + hairline border combo so the value reads as
+// a proper badge/chip rather than plain bold colored text.
+const getRiskBadgeClasses = (level: string) => {
+  if (/high|substantially/i.test(level)) {
+    return 'bg-red-500/10 text-red-600 dark:bg-red-500/15 dark:text-red-400 border border-red-500/20';
+  }
+  if (/increased/i.test(level)) {
+    return 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400 border border-amber-500/20';
+  }
+  return 'bg-green-500/10 text-green-600 dark:bg-green-500/15 dark:text-green-400 border border-green-500/20';
+};
+
+// --- SOURCES & REFERENCES ---
+// One entry per formula/standard actually implemented in bmiLogic.ts —
+// deliberately not a generic "BMI is a WHO metric" blurb. Each citation was
+// checked against its primary source before being added here (not just
+// carried over from wherever the original code comment happened to say).
+// Ranges without a `url` (Healthy Weight Range, BMI Prime) are derived
+// figures rather than a separately published guideline, and are labeled as
+// such rather than pinned to a citation that doesn't really exist for them.
+interface SourceEntry {
+  metric: string;
+  citation: string;
+  url?: string;
+  linkLabel?: string;
+}
+
+const BMI_SOURCES: SourceEntry[] = [
+  {
+    metric: 'BMI Formula',
+    citation: "Adolphe Quetelet's Index (1832): weight (kg) \u00f7 height (m)\u00b2. The imperial constant (703) is CDC's standard rounded conversion factor.",
+    url: 'https://www.cdc.gov/bmi/about/index.html',
+    linkLabel: 'CDC \u2014 About Body Mass Index (BMI)',
+  },
+  {
+    metric: 'Global (WHO) BMI Classification',
+    citation: "The 8-tier classification, from Severe Thinness through Obese Class III, combines WHO's 1995 Expert Committee report (Technical Report Series 854 \u2014 thinness grades, normal range, overweight/obese cut-offs) with WHO's 2000 report Obesity: Preventing and Managing the Global Epidemic (Technical Report Series 894), which added the Pre-obese label and split obesity into Class I/II/III. WHO's original interactive classification page (formerly apps.who.int/bmi) has been retired; the linked WHO page documents the same underlying cut-offs in a condensed form.",
+    url: 'https://apps.who.int/nutrition/landscape/help.aspx?menu=0&helpid=420',
+    linkLabel: 'World Health Organization \u2014 BMI (NLiS)',
+  },
+  {
+    metric: 'Asia-Pacific BMI Classification',
+    citation: 'Lower cut-offs (Overweight from 23.0, Obese from 25.0) come from the WHO Regional Office for the Western Pacific, IASO and IOTF\u2019s 2000 consensus statement for Asian populations.',
+    url: 'https://www.worldobesity.org/about/about-obesity/obesity-classification',
+    linkLabel: 'WHO / IASO / IOTF (2000), reproduced by World Obesity Federation',
+  },
+  {
+    metric: 'Healthy Weight Range',
+    citation: "Computed as (Normal-BMI lower or upper bound) \u00d7 height (m)\u00b2 \u2014 the same method NIH/NHLBI-style calculators use to turn a BMI band into a weight range. It's a derived figure rather than its own published guideline, and uses the upper bound of whichever standard (WHO or Asia-Pacific) is currently selected.",
+  },
+  {
+    metric: 'BMI Prime',
+    citation: "BMI \u00f7 25, where 25 is WHO/CDC's fixed upper limit of the normal-BMI band. A widely used, dimensionless simplification of BMI \u2014 not itself a separately published WHO/CDC metric.",
+  },
+  {
+    metric: 'Ponderal Index',
+    citation: "Also called Rohrer's Index (Fritz Rohrer, 1921): weight (kg) \u00f7 height (m)\u00b3. An alternative to BMI that's less biased at height extremes.",
+    url: 'https://www.measurement-toolkit.org/anthropometry/anthropometric-indices/ponderal',
+    linkLabel: 'Measurement Toolkit \u2014 Ponderal Index',
+  },
+  {
+    metric: 'Waist-to-Height Ratio Bands',
+    citation: '0.40\u20130.49 (healthy) / 0.50\u20130.59 (increased risk) / \u22650.60 (high risk) are NICE\u2019s official central-adiposity bands \u2014 first introduced in a 2022 update and current in guideline NG246 (2025). The additional <0.40 "Slim" band below NICE\u2019s range is not part of NICE\u2019s guidance; it reflects Margaret Ashwell\u2019s original 1996 waist-to-height "traffic light" concept (the basis NICE\u2019s own guidance builds on), which set 0.4 as the start of the "OK" zone.',
+    url: 'https://www.nice.org.uk/guidance/ng246/chapter/Identifying-and-assessing-overweight-obesity-and-central-adiposity',
+    linkLabel: 'NICE Guideline NG246 \u2014 Waist-to-height ratio thresholds',
+  },
+  {
+    metric: 'WHO Waist-Circumference Risk (94/102cm men, 80/88cm women)',
+    citation: "World Health Organization's official sex-specific waist-circumference cut-offs for increased and substantially increased metabolic risk.",
+    url: 'https://iris.who.int/handle/10665/44583',
+    linkLabel: 'WHO Expert Consultation (2008) \u2014 Waist Circumference and Waist-Hip Ratio',
+  },
+];
+
+// --- ACCESSIBLE INFO TOOLTIP ---
+// The previous pattern (group + group-hover:opacity-100) only opens on
+// mouse hover, which means it never opens at all on touch devices — most of
+// this app's traffic. This version opens on hover (desktop) AND on tap
+// (mobile/touch), and closes when the user taps elsewhere.
+// --- SLOW, EASED "ANCHOR SCROLL" ---
+// Native `element.scrollIntoView({ behavior: 'smooth' })` is intentionally
+// fast and its speed isn't controllable across browsers. To match a slower,
+// more deliberate "the answer is arriving" feel (~1.8s, eased in and out),
+// this animates window.scrollTo manually via requestAnimationFrame instead.
+//
+// The scroll target itself uses an "anchor scroll" pattern: rather than
+// scrolling to align on the RESULT (which would let a tall result push the
+// inputs off-screen), it aligns on the tail end of the INPUT section — the
+// Clear/Calculate button row — at the top of the viewport. Because that row
+// is the last thing before the results in the DOM, whatever comes after it
+// (the pregnancy notice or the full BMI gauge/tables) automatically lands
+// in the same view, just below it. This also means the same call works for
+// every result path (pregnancy disclaimer or full results) without needing
+// to pick a different target element per path, and it stays correct no
+// matter where the button physically sits on the page, since the target
+// element's position is measured live via getBoundingClientRect() rather
+// than assumed.
+const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+const slowScrollToElement = (element: HTMLElement, duration = 1800, topOffset = 24) => {
+  const startY = window.scrollY;
+  const targetY = element.getBoundingClientRect().top + window.scrollY - topOffset;
+  const distance = targetY - startY;
+
+  if (Math.abs(distance) < 1) return;
+
+  const startTime = performance.now();
+
+  const step = (now: number) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    window.scrollTo(0, startY + distance * easeInOutCubic(progress));
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  };
+
+  window.requestAnimationFrame(step);
+};
+
+const InfoTip: React.FC<{ text: string; widthClass?: string }> = ({ text, widthClass = 'w-56' }) => {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [open]);
+
+  return (
+    <span ref={wrapperRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        aria-expanded={open}
+        aria-label="More information"
+        className="cursor-pointer text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+      >
+        <SafeIcon icon={FiInfo} className="w-4 h-4" />
+      </button>
+      <span
+        role="tooltip"
+        className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 ${widthClass} bg-neutral-900 text-white text-xs rounded p-2 transition-opacity pointer-events-none z-10 text-center ${
+          open ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {text}
+      </span>
+    </span>
+  );
 };
 
 const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange }) => {
@@ -80,6 +248,20 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
   // Classification table — a ref to scroll to, plus a brief highlight pulse.
   const activeClassificationRowRef = useRef<HTMLDivElement | null>(null);
   const [classificationPulse, setClassificationPulse] = useState<boolean>(false);
+
+  // Expand/collapse state for the Sources panel below the Disclaimer.
+  const [showSources, setShowSources] = useState<boolean>(false);
+
+  // Anchor for the "jump to result" scroll after Calculate is pressed — no
+  // spinner/loading state on the button itself, just a smooth scroll once
+  // the result is on screen so the user notices something happened. This
+  // ref sits on the Clear/Calculate button row itself (the tail end of the
+  // input section) rather than on either result path, since the scroll
+  // aligns on the inputs, not the result — see the anchor-scroll comment
+  // above `slowScrollToElement`. One ref covers both the pregnancy and
+  // normal result paths, since both render as the next sibling after this
+  // row.
+  const actionButtonsRef = useRef<HTMLDivElement | null>(null);
 
   const isCalculateDisabled = useMemo(() => {
     if (!age || !weight) return true;
@@ -147,6 +329,12 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     
     resetCalculation();
     const w = parseFloat(weight.toString());
+    // Waist circumference must convert alongside height/weight — otherwise
+    // the same digits the user typed under one unit (e.g. "85" cm) silently
+    // get reinterpreted as the other unit ("85" in) after the toggle, which
+    // both shows a wrong number AND breaks calculateWaistMetrics (it assumes
+    // waist and height arrive in the same unit).
+    const wc = parseFloat(waist.toString());
     
     if (!Number.isNaN(w)) {
       if (newUnit === 'imperial') {
@@ -154,8 +342,18 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
         setWeight(+(w * 2.20462).toFixed(1));
         if (!Number.isNaN(h)) {
           const totalInches = h / 2.54;
-          setHeightFt(Math.floor(totalInches / 12));
-          setHeightIn(Math.round(totalInches % 12));
+          let ft = Math.floor(totalInches / 12);
+          let inch = Math.round(totalInches % 12);
+          // Rounding the leftover inches up can land exactly on 12 (e.g. a
+          // height whose remainder rounds from 11.6 to 12), which would
+          // display as an invalid "12 in" instead of carrying into the next
+          // foot. Carry it over so the split values stay valid (0-11 in).
+          if (inch === 12) {
+            inch = 0;
+            ft += 1;
+          }
+          setHeightFt(ft);
+          setHeightIn(inch);
         }
       } else {
         const ft = parseFloat(heightFt.toString());
@@ -167,6 +365,11 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
         }
       }
     }
+
+    if (!Number.isNaN(wc) && wc > 0) {
+      setWaist(newUnit === 'imperial' ? +(wc / 2.54).toFixed(1) : +(wc * 2.54).toFixed(1));
+    }
+
     setUnit(newUnit);
   };
 
@@ -251,6 +454,24 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     if (onCalculationComplete) {
       onCalculationComplete();
     }
+
+    // Slow, eased anchor-scroll instead of a button loading/processing
+    // state. The result section is conditionally rendered and can also
+    // shift the action-button row itself (e.g. a validation error above it
+    // clearing), so waiting two animation frames lets React commit and
+    // paint first — that way the anchor's measured position reflects the
+    // final, settled layout instead of a stale one.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const el = actionButtonsRef.current;
+        if (!el) return;
+        if (prefersReducedMotion) {
+          el.scrollIntoView({ behavior: 'auto', block: 'start' });
+        } else {
+          slowScrollToElement(el, 1800);
+        }
+      });
+    });
   };
 
   const bmiRanges = getBMIRanges(region);
@@ -359,6 +580,16 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     }
     const pdfOnlySections: ShareableReport['sections'] = [{ heading: 'Your Inputs', rows: inputRows, variant: 'input' }];
 
+    // The quick-share PNG should stay a compact snapshot, not a full report —
+    // it already shows the matched category via headlineLabel, so it skips
+    // the full Detailed Classification table (every band, not just theirs),
+    // which the paginated PDF can afford to show in full. Key Results and
+    // Waist Metrics (the actual numbers someone would want in a screenshot)
+    // are kept.
+    const imageSections: ShareableReport['sections'] = sections.filter(
+      (s) => !s.heading?.startsWith('Detailed Classification')
+    );
+
     return {
       title: 'BMI Result',
       headlineValue: bmi.toFixed(1),
@@ -367,6 +598,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       meta: [region === 'who' ? 'WHO Standard' : 'Asia-Pacific Standard', unit === 'metric' ? 'Metric Units' : 'Imperial Units'],
       sections,
       pdfOnlySections,
+      imageSections,
       disclaimer: 'For informational purposes only \u2014 not medical advice.',
       fileNameBase: `bmi-result-${bmi.toFixed(1)}`,
     };
@@ -397,10 +629,10 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       
       {/* SECTION 1: Settings Switchers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-3 text-center md:text-left">
             Measurement Unit
@@ -410,7 +642,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               type="button"
               aria-pressed={unit === 'metric'}
               onClick={() => handleUnitToggle('metric')}
-              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 ${
+              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 cursor-pointer ${
                 unit === 'metric' ? 'bg-white dark:bg-neutral-600 text-neutral-900 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400'
               }`}
             >
@@ -420,7 +652,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               type="button"
               aria-pressed={unit === 'imperial'}
               onClick={() => handleUnitToggle('imperial')}
-              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 ${
+              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 cursor-pointer ${
                 unit === 'imperial' ? 'bg-white dark:bg-neutral-600 text-neutral-900 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400'
               }`}
             >
@@ -438,7 +670,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               type="button"
               aria-pressed={region === 'who'}
               onClick={() => { setRegion('who'); resetCalculation(); }}
-              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 ${
+              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 cursor-pointer ${
                 region === 'who' ? 'bg-white dark:bg-neutral-600 text-neutral-900 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400'
               }`}
             >
@@ -448,7 +680,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               type="button"
               aria-pressed={region === 'asia-pacific'}
               onClick={() => { setRegion('asia-pacific'); resetCalculation(); }}
-              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 ${
+              className={`flex-1 px-4 py-2.5 rounded-md font-bold transition-all duration-200 cursor-pointer ${
                 region === 'asia-pacific' ? 'bg-white dark:bg-neutral-600 text-neutral-900 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400'
               }`}
             >
@@ -461,16 +693,11 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       <hr className="border-t border-neutral-200 dark:border-neutral-800" />
       
       {/* SECTION 2: Demographics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div>
           <label htmlFor="age-input" className="flex items-center gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Age (years)
-            <span className="group relative cursor-pointer">
-              <SafeIcon icon={FiInfo} className="w-4 h-4 text-neutral-400" />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-neutral-900 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                Standard adult BMI guidelines apply to individuals aged 20 to 120.
-              </span>
-            </span>
+            <InfoTip widthClass="w-48" text="Standard adult BMI guidelines apply to individuals aged 20 to 120." />
           </label>
           <input
             id="age-input"
@@ -493,25 +720,20 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
         <div>
           <label className="flex items-center gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Biological Sex
-            <span className="group relative cursor-pointer">
-              <SafeIcon icon={FiInfo} className="w-4 h-4 text-neutral-400" />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-neutral-900 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                While the BMI formula is identical for all adults, biological sex influences healthy body fat and muscle distribution limits.
-              </span>
-            </span>
+            <InfoTip text="While the BMI formula is identical for all adults, biological sex influences healthy body fat and muscle distribution limits." />
           </label>
           <div className="flex bg-neutral-200 dark:bg-neutral-700 p-1 rounded-lg h-[50px]">
             <button
               type="button"
               onClick={() => { setGender('male'); setIsPregnant(false); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${gender === 'male' ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${gender === 'male' ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               Male
             </button>
             <button
               type="button"
               onClick={() => { setGender('female'); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${gender === 'female' ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${gender === 'female' ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               Female
             </button>
@@ -521,25 +743,20 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
         <div>
           <label className="flex items-center gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
             Athletic Build?
-            <span className="group relative cursor-pointer">
-              <SafeIcon icon={FiInfo} className="w-4 h-4 text-neutral-400" />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-neutral-900 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                Select 'Yes' if you have significant muscle mass. This adjusts the clinical interpretation of high BMI scores.
-              </span>
-            </span>
+            <InfoTip text="Select 'Yes' if you have significant muscle mass. This adjusts the clinical interpretation of high BMI scores." />
           </label>
           <div className="flex bg-neutral-200 dark:bg-neutral-700 p-1 rounded-lg h-[50px]">
             <button
               type="button"
               onClick={() => { setIsAthletic(false); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${!isAthletic ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${!isAthletic ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               No
             </button>
             <button
               type="button"
               onClick={() => { setIsAthletic(true); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${isAthletic ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${isAthletic ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               Yes
             </button>
@@ -562,14 +779,14 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
             <button
               type="button"
               onClick={() => { setIsPregnant(false); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${!isPregnant ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${!isPregnant ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               No
             </button>
             <button
               type="button"
               onClick={() => { setIsPregnant(true); resetCalculation(); }}
-              className={`flex-1 rounded-md font-medium transition-all ${isPregnant ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
+              className={`flex-1 rounded-md font-medium transition-all cursor-pointer ${isPregnant ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'}`}
             >
               Yes
             </button>
@@ -580,9 +797,9 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       <hr className="border-t border-neutral-200 dark:border-neutral-800" />
 
       {/* SECTION 3: Measurements (Constrained Width) */}
-      <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-neutral-50 dark:bg-neutral-800/50 p-4 sm:p-5 md:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
-          <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-4">
+      <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+        <div className="bg-neutral-50 dark:bg-neutral-800/50 p-3.5 sm:p-4 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
+          <label className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5">
             Height {unit === 'metric' ? '(cm)' : '(ft & in)'}
           </label>
           
@@ -592,18 +809,18 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               type="number"
               value={height}
               onChange={(e) => { setHeight(e.target.value); resetCalculation(); }}
-              className={`w-full px-4 py-3.5 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
+              className={`w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
               placeholder="e.g. 170"
             />
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="relative">
                 <input
                   type="number"
                   value={heightFt}
                   onChange={(e) => { setHeightFt(e.target.value); resetCalculation(); }}
-                  className={`w-full px-4 py-3.5 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
-                  placeholder="ft" min="3" max="8"
+                  className={`w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
+                  placeholder="ft" min="1" max="9"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 font-medium pointer-events-none">ft</span>
               </div>
@@ -612,18 +829,18 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   type="number"
                   value={heightIn}
                   onChange={(e) => { setHeightIn(e.target.value); resetCalculation(); }}
-                  className={`w-full px-4 py-3.5 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
+                  className={`w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
                   placeholder="in" min="0" max="11"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 font-medium pointer-events-none">in</span>
               </div>
             </div>
           )}
-          {heightError && <p className="mt-3 text-sm font-medium text-red-500">{heightError}</p>}
+          {heightError && <p className="mt-2.5 text-sm font-medium text-red-500">{heightError}</p>}
         </div>
 
-        <div className="bg-neutral-50 dark:bg-neutral-800/50 p-4 sm:p-5 md:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
-          <label htmlFor="weight-input" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-4">
+        <div className="bg-neutral-50 dark:bg-neutral-800/50 p-3.5 sm:p-4 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
+          <label htmlFor="weight-input" className="block text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5">
             Weight {unit === 'metric' ? '(kg)' : '(lbs)'}
           </label>
           <input
@@ -631,46 +848,47 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
             type="number"
             value={weight}
             onChange={(e) => { setWeight(e.target.value); resetCalculation(); }}
-            className={`w-full px-4 py-3.5 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
+            className={`w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
             placeholder={`e.g. ${unit === 'metric' ? '70' : '150'}`}
           />
-          {weightError && <p className="mt-3 text-sm font-medium text-red-500">{weightError}</p>}
+          {weightError && <p className="mt-2.5 text-sm font-medium text-red-500">{weightError}</p>}
         </div>
       </div>
 
       {!isPregnant && (
         <div className="max-w-3xl mx-auto">
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 p-4 sm:p-5 md:p-6 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
-            <label htmlFor="waist-input" className="flex items-center gap-1.5 text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-4">
+          <div className="bg-neutral-50 dark:bg-neutral-800/50 p-3.5 sm:p-4 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
+            <label htmlFor="waist-input" className="flex items-center gap-1.5 text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5">
               Waist Circumference {unit === 'metric' ? '(cm)' : '(inches)'}
               <span className="text-xs font-semibold text-neutral-400 normal-case">— Optional</span>
-              <span className="group relative cursor-pointer">
-                <SafeIcon icon={FiInfo} className="w-4 h-4 text-neutral-400" />
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-neutral-900 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center">
-                  Add this to see your waist-to-height ratio and WHO's waist-circumference risk screen — both complement BMI by flagging central body fat that BMI alone can miss. Measure midway between your lowest rib and hip bone.
-                </span>
-              </span>
+              <InfoTip
+                widthClass="w-64"
+                text="Add this to see your waist-to-height ratio and WHO's waist-circumference risk screen — both complement BMI by flagging central body fat that BMI alone can miss. Measure midway between your lowest rib and hip bone."
+              />
             </label>
             <input
               id="waist-input"
               type="number"
               value={waist}
               onChange={(e) => { setWaist(e.target.value); resetCalculation(); }}
-              className={`w-full px-4 py-3.5 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
+              className={`w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-neutral-700 shadow-sm ${noSpinnerClass}`}
               placeholder={`e.g. ${unit === 'metric' ? '85' : '33'}`}
             />
-            {waistError && <p className="mt-3 text-sm font-medium text-red-500">{waistError}</p>}
+            {waistError && <p className="mt-2.5 text-sm font-medium text-red-500">{waistError}</p>}
           </div>
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-4">
+      {/* Action Buttons — also the scroll anchor for handleCalculate's
+          "anchor scroll": aligning on this row keeps it (and therefore the
+          inputs above it) visible at the top of the viewport after
+          Calculate is pressed, with the results starting right below. */}
+      <div ref={actionButtonsRef} className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-4">
         <button
           type="button"
           onClick={handleClear}
           disabled={isClearDisabled}
-          className="w-full md:w-auto px-8 py-3.5 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-neutral-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full md:w-auto px-8 py-3.5 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all duration-200 active:scale-[0.97] focus:outline-none focus:ring-4 focus:ring-neutral-500/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
         >
           Clear
         </button>
@@ -678,7 +896,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           type="button"
           onClick={handleCalculate}
           disabled={isCalculateDisabled}
-          className="w-full md:w-auto px-12 py-3.5 bg-indigo-600 hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold uppercase tracking-wider rounded-xl shadow-[0_4px_14px_0_rgb(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-indigo-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          className="w-full md:w-auto px-12 py-3.5 bg-indigo-600 hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold uppercase tracking-wider rounded-xl shadow-[0_4px_14px_0_rgb(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] transition-all duration-200 active:scale-[0.97] focus:outline-none focus:ring-4 focus:ring-indigo-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100"
         >
           Calculate
         </button>
@@ -740,7 +958,9 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           ) : (
           <>
           {/* ELITE 4K SVG GAUGE & OVERLAY (Compact Profile) */}
-          <div className="bg-white dark:bg-neutral-800 rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] relative overflow-hidden flex flex-col items-center">
+          <div
+            className="bg-white dark:bg-neutral-800 rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] relative overflow-hidden flex flex-col items-center"
+          >
             
             <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 opacity-20 blur-[80px] rounded-full pointer-events-none transition-colors duration-700 ${currentColors.bg}`} />
 
@@ -806,7 +1026,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                 <button
                   type="button"
                   onClick={handleJumpToClassification}
-                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
+                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border transition-colors cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
                   style={{ borderColor: currentColors.hex, color: currentColors.hex }}
                 >
                   <SafeIcon icon={FiArrowDown} className="w-3.5 h-3.5" />
@@ -835,12 +1055,14 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
             </div>
           </div>
 
-          {/* PREMIUM RESULTS CARDS (UNIFIED STYLING) */}
+          {/* PRIMARY RESULT CARDS — accent tied to the same category color as
+              the gauge and insight card (not an arbitrary per-card color), so
+              the whole result reads as one coherent, deliberate palette. */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-purple-500 transition-opacity" />
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-sm hover:shadow-md transition-shadow group">
+              <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${currentColors.bg}`} />
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-purple-600 dark:text-purple-400">
+                <div className={`w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 ${currentColors.text}`}>
                   <SafeIcon icon={FiTarget} className="w-6 h-6" />
                 </div>
                 <div>
@@ -848,19 +1070,19 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   <p className="text-xs font-semibold text-neutral-400">Standard guideline</p>
                 </div>
               </div>
-              <div className="text-3xl font-black text-neutral-900 dark:text-white tracking-tight">
+              <div className="text-xl md:text-2xl font-extrabold text-neutral-900 dark:text-white tracking-tight">
                 {idealWeight.max === 0 ? '--' : `${idealWeight.min.toFixed(1)} - ${idealWeight.max.toFixed(1)}`}
-                <span className="text-base font-bold text-neutral-500 uppercase ml-2">{unit === 'metric' ? 'kg' : 'lbs'}</span>
+                <span className="text-sm font-bold text-neutral-500 uppercase ml-2">{unit === 'metric' ? 'kg' : 'lbs'}</span>
               </div>
               <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mt-2">
                 Optimal target for your height.
               </div>
             </div>
 
-            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-teal-500 transition-opacity" />
+            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-sm hover:shadow-md transition-shadow group">
+              <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${currentColors.bg}`} />
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-teal-600 dark:text-teal-400">
+                <div className={`w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 ${currentColors.text}`}>
                   <SafeIcon icon={FiTrendingUp} className="w-6 h-6" />
                 </div>
                 <div>
@@ -868,119 +1090,119 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   <p className="text-xs font-semibold text-neutral-400">Health indicator</p>
                 </div>
               </div>
-              <div className="text-2xl md:text-3xl font-black text-neutral-900 dark:text-white tracking-tight">
+              <div className="text-xl md:text-2xl font-extrabold text-neutral-900 dark:text-white tracking-tight">
                 {idealWeight.max === 0
                   ? '--'
                   : parseFloat(weight.toString()) > idealWeight.max ? 'Above Guideline' : 
                     parseFloat(weight.toString()) < idealWeight.min ? 'Below Guideline' : 'Within Range'}
               </div>
-              <div className="text-sm font-bold text-teal-600 dark:text-teal-500 mt-2">
+              <div className={`text-sm font-bold mt-2 ${currentColors.text}`}>
                 {getWeightStatusSubtext()}
               </div>
             </div>
           </div>
 
-          {/* SECONDARY METRICS: BMI PRIME & PONDERAL INDEX */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-sky-500 transition-opacity" />
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-sky-600 dark:text-sky-400">
-                  <SafeIcon icon={FiActivity} className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">BMI Prime</h3>
-                  <p className="text-xs font-semibold text-neutral-400">Ratio to normal limit (25)</p>
-                </div>
-              </div>
-              <div className="text-3xl font-black text-neutral-900 dark:text-white tracking-tight">
-                {bmiPrime === 0 ? '--' : bmiPrime.toFixed(2)}
-              </div>
-              <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mt-2">
-                {bmiPrime === 0 ? 'Enter your details above.' : bmiPrime < 1 ? 'Below the normal-weight ceiling.' : 'At or above the normal-weight ceiling.'}
-              </div>
-            </div>
-
-            <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500 transition-opacity" />
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-amber-600 dark:text-amber-400">
+          {/* ADDITIONAL METRICS — BMI Prime, Ponderal Index, and (when
+              provided) waist metrics as compact reference rows in one card,
+              rather than up to four more full-weight hero cards competing
+              for the same attention as the primary result above. Shell now
+              matches the Wellness Overview / Healthy Weight / Weight Status
+              cards above it: slate-50 body, left category-color accent bar,
+              icon badge + eyebrow header, soft shadow that deepens on hover.
+              Each row is its own elevated white "mini-card" (rather than a
+              flat divided list) so the block reads at the same visual
+              richness as its neighbors instead of a plain reference table. */}
+          <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-sm hover:shadow-md transition-shadow group">
+            <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-300 ${currentColors.bg}`} />
+            <div className="relative z-10">
+              <div className="flex items-center gap-4 mb-5">
+                <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 ${currentColors.text}`}>
                   <SafeIcon icon={FiBarChart2} className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Ponderal Index</h3>
-                  <p className="text-xs font-semibold text-neutral-400">Height-weighted alternative</p>
+                  <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest">Additional Metrics</h3>
+                  <p className="text-xs font-semibold text-neutral-400 mt-0.5">Extra reference values</p>
                 </div>
               </div>
-              <div className="text-3xl font-black text-neutral-900 dark:text-white tracking-tight">
-                {ponderalIndex === 0 ? '--' : ponderalIndex.toFixed(1)}
-                <span className="text-base font-bold text-neutral-500 uppercase ml-2">kg/m³</span>
-              </div>
-              <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mt-2">
-                More reliable than BMI for very tall or short individuals.
+
+              <div className="space-y-3">
+                {/* Every row is a plain single-line flex row — label left,
+                    value right, no row-level wrapping. The risk badges (the
+                    only values long enough to ever run out of room) wrap
+                    *inside their own pill* via a max-width instead of
+                    dropping the whole value onto a separate line. That keeps
+                    the badge anchored directly beside/under its label at
+                    every screen size instead of floating away with a gap. */}
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-white dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-700/50 shadow-sm px-4 sm:px-5 py-4">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-200">BMI Prime</span>
+                    <p className="text-xs text-neutral-400 mt-0.5">Ratio to normal limit (25)</p>
+                  </div>
+                  <div className="flex-shrink-0 text-lg font-bold text-neutral-900 dark:text-white">
+                    {bmiPrime === 0 ? '--' : bmiPrime.toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-white dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-700/50 shadow-sm px-4 sm:px-5 py-4">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-neutral-700 dark:text-neutral-200">Ponderal Index</span>
+                    <p className="text-xs text-neutral-400 mt-0.5">Height-weighted alternative</p>
+                  </div>
+                  <div className="flex-shrink-0 text-lg font-bold text-neutral-900 dark:text-white whitespace-nowrap">
+                    {ponderalIndex === 0 ? '--' : ponderalIndex.toFixed(1)}
+                    <span className="text-xs font-bold text-neutral-400 uppercase ml-1">kg/m³</span>
+                  </div>
+                </div>
+
+                {whtrCategory && (
+                  <div className="flex items-center justify-between gap-3 rounded-2xl bg-white dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-700/50 shadow-sm px-4 sm:px-5 py-4">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-200">Waist-to-Height Ratio</span>
+                      <p className="text-xs text-neutral-400 mt-0.5">NICE guideline (WHtR &lt; 0.50)</p>
+                    </div>
+                    {/* Number stacked above its risk badge, both right-
+                        aligned as one column — deterministic at any width,
+                        no dependence on where the row happens to wrap. */}
+                    <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                      <div className="text-lg font-bold text-neutral-900 dark:text-white whitespace-nowrap">{whtr.toFixed(2)}</div>
+                      <span className={`inline-flex items-center justify-center text-center max-w-[150px] sm:max-w-none leading-snug whitespace-normal text-[11px] font-bold uppercase px-2.5 py-1 rounded-full ${getRiskBadgeClasses(whtrCategory)}`}>
+                        {whtrCategory}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {waistRiskLevel && (
+                  <div className="flex items-center justify-between gap-3 rounded-2xl bg-white dark:bg-neutral-900/50 border border-neutral-100 dark:border-neutral-700/50 shadow-sm px-4 sm:px-5 py-4">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-neutral-700 dark:text-neutral-200">Waist Risk (WHO)</span>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        {gender === 'male' ? 'Threshold: 94cm / 102cm (men)' : 'Threshold: 80cm / 88cm (women)'}
+                      </p>
+                    </div>
+                    {/* Long labels like "Substantially increased risk" wrap
+                        to a second line WITHIN the pill (max-w + normal
+                        whitespace) rather than the badge itself relocating —
+                        it always stays flush right, level with the label. */}
+                    <span className={`flex-shrink-0 inline-flex items-center justify-center text-center max-w-[150px] sm:max-w-none leading-snug whitespace-normal text-[11px] font-bold uppercase px-2.5 py-1.5 rounded-full ${getRiskBadgeClasses(waistRiskLevel)}`}>
+                      {waistRiskLevel}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* WAIST-TO-HEIGHT RATIO & WHO WAIST-RISK (only shown when waist was provided) */}
-          {whtrCategory && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-                <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${
-                  whtrCategory === 'High risk' ? 'bg-red-500' : whtrCategory === 'Increased risk' ? 'bg-yellow-500' : 'bg-green-500'
-                }`} />
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-cyan-600 dark:text-cyan-400">
-                    <SafeIcon icon={FiTarget} className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Waist-to-Height Ratio</h3>
-                    <p className="text-xs font-semibold text-neutral-400">NICE guideline (WHtR &lt; 0.50)</p>
-                  </div>
-                </div>
-                <div className="text-3xl font-black text-neutral-900 dark:text-white tracking-tight">
-                  {whtr.toFixed(2)}
-                </div>
-                <div className={`text-sm font-bold mt-2 ${
-                  whtrCategory === 'High risk' ? 'text-red-500' : whtrCategory === 'Increased risk' ? 'text-yellow-600' : 'text-green-600'
-                }`}>
-                  {whtrCategory}
-                </div>
-              </div>
-
-              <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md hover:shadow-lg transition-shadow group">
-                <div className={`absolute top-0 left-0 w-full h-1.5 transition-opacity ${
-                  waistRiskLevel === 'Substantially increased risk' ? 'bg-red-500' : waistRiskLevel === 'Increased risk' ? 'bg-yellow-500' : 'bg-green-500'
-                }`} />
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white dark:bg-neutral-900/50 flex items-center justify-center shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-orange-600 dark:text-orange-400">
-                    <SafeIcon icon={FiAlertCircle} className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Waist Risk (WHO)</h3>
-                    <p className="text-xs font-semibold text-neutral-400">Sex-specific threshold, in cm</p>
-                  </div>
-                </div>
-                <div className={`text-2xl md:text-3xl font-black tracking-tight ${
-                  waistRiskLevel === 'Substantially increased risk' ? 'text-red-500' : waistRiskLevel === 'Increased risk' ? 'text-yellow-600' : 'text-green-600'
-                }`}>
-                  {waistRiskLevel}
-                </div>
-                <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mt-2">
-                  {gender === 'male' ? 'Threshold: 94cm / 102cm (men)' : 'Threshold: 80cm / 88cm (women)'}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* DYNAMIC BMI MATRIX GRID */}
           {gridData && (
-            <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden overflow-x-auto">
+            <div className="relative bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
               <div className="p-6 md:p-8 min-w-[600px]">
                 <div className="flex justify-between items-end mb-6">
                   <div>
                     <h3 className="text-xl font-extrabold text-neutral-900 dark:text-white mb-2">Your BMI Matrix</h3>
-                    <span className="text-sm font-medium text-neutral-500">Center highlights your exact metrics</span>
+                    <span className="text-sm font-medium text-neutral-500 block">Center highlights your exact metrics</span>
+                    <span className="md:hidden text-xs font-semibold text-neutral-400 mt-1 block">Swipe to see the full matrix &rarr;</span>
                   </div>
                   {/* Universal Color Legend */}
                   <div className="flex gap-4 text-xs font-bold uppercase tracking-wider bg-neutral-50 dark:bg-neutral-900/50 py-2 px-4 rounded-xl border border-neutral-100 dark:border-neutral-800">
@@ -1027,6 +1249,8 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   </tbody>
                 </table>
               </div>
+              </div>
+              <div className="md:hidden pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-white dark:from-neutral-800 to-transparent" />
             </div>
           )}
           
@@ -1045,7 +1269,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   <div
                     key={index}
                     ref={isActive ? activeClassificationRowRef : undefined}
-                    className={`flex items-center justify-between px-6 md:px-8 py-5 transition-all duration-300 relative ${
+                    className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-6 md:px-8 py-4 sm:py-5 transition-all duration-300 relative ${
                       isActive ? 'bg-neutral-50 dark:bg-neutral-700/20 shadow-inner' : 'hover:bg-neutral-50/50 dark:hover:bg-neutral-800/50'
                     } ${isActive && classificationPulse ? 'scale-[1.01]' : ''}`}
                     style={isActive && classificationPulse ? { boxShadow: `inset 0 0 0 2px ${rowColors.hex}` } : undefined}
@@ -1055,22 +1279,34 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                       <div className={`absolute left-0 top-0 w-1.5 h-full ${rowColors.bg}`} />
                     )}
 
-                    <div className="flex items-center space-x-5 pl-2">
-                      <div className={`w-3.5 h-3.5 rounded-full ${rowColors.bg} shadow-sm`}></div>
-                      <span className={`text-lg tracking-tight ${isActive ? 'font-black text-neutral-900 dark:text-white' : 'font-semibold text-neutral-600 dark:text-neutral-400'}`}>
+                    {/* Category info stays inline with the range pill
+                        whenever there's room; it only wraps to its own
+                        line if space genuinely runs out (e.g. the active
+                        row's extra "Your Result" tag on a narrow phone). */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-2 min-w-0">
+                      <div className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full flex-shrink-0 ${rowColors.bg} shadow-sm`}></div>
+                      <span className={`text-base sm:text-lg tracking-tight ${isActive ? 'font-black text-neutral-900 dark:text-white' : 'font-semibold text-neutral-600 dark:text-neutral-400'}`}>
                         {range.category}
                       </span>
                       {isActive && (
                         <span
-                          className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-1 rounded-full"
+                          className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-1 rounded-full flex-shrink-0"
                           style={{ backgroundColor: `${rowColors.hex}1A`, color: rowColors.hex }}
                         >
                           Your Result
                         </span>
                       )}
                     </div>
-                    <span className={`text-base tracking-wide font-bold px-4 py-2 rounded-lg border ${
-                      isActive ? `bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 shadow-sm` : 'bg-transparent text-neutral-500 border-transparent'
+                    {/* Range pill: always rendered as a visible tinted chip
+                        (not just when active) so every row reads as a
+                        deliberately designed component. justify-between on
+                        the row (not ml-auto here) keeps it right-aligned
+                        when inline, and left-aligned under the category
+                        info if it ever has to wrap on a very narrow phone. */}
+                    <span className={`text-sm sm:text-base tracking-wide font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 shadow-sm'
+                        : 'bg-neutral-50 dark:bg-neutral-900/40 text-neutral-500 dark:text-neutral-400 border-neutral-200/70 dark:border-neutral-700/50'
                     }`}>
                       {range.label}
                     </span>
@@ -1089,6 +1325,55 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
         <p className="leading-relaxed">
           <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This BMI calculator provides a general guide, not medical advice. BMI does not account for muscle mass, age, or ethnic differences; highly muscular individuals may be falsely classified as overweight. Always consult a healthcare professional before altering your diet or lifestyle.
         </p>
+      </div>
+
+      {/* SOURCES — every formula/cut-off used above, cited to its primary
+          source, for transparency and compliance. Collapsed by default
+          since it's a reference list rather than something most users need
+          open every visit, but always one tap away rather than buried on a
+          separate page. */}
+      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowSources((v) => !v)}
+          aria-expanded={showSources}
+          className="w-full flex items-center justify-between gap-3 p-6 text-left cursor-pointer"
+        >
+          <span className="flex items-center gap-2 flex-wrap">
+            <strong className="text-neutral-900 dark:text-neutral-200 font-bold">Sources</strong>
+            <span className="font-normal text-neutral-500 dark:text-neutral-500">— every formula and threshold used above, cited</span>
+          </span>
+          <SafeIcon
+            icon={FiArrowDown}
+            className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${showSources ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {showSources && (
+          <div className="px-6 pb-6 space-y-4">
+            {BMI_SOURCES.map((source, i) => (
+              <div
+                key={source.metric}
+                className={i === 0 ? '' : 'pt-4 border-t border-neutral-200/70 dark:border-neutral-800'}
+              >
+                <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
+                <p className="leading-relaxed mt-1">{source.citation}</p>
+                {source.url && (
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-2 text-primary-600 dark:text-primary-400 hover:underline font-semibold"
+                  >
+                    {source.linkLabel ?? 'View source'}
+                  </a>
+                )}
+              </div>
+            ))}
+            <p className="pt-4 border-t border-neutral-200/70 dark:border-neutral-800 text-xs text-neutral-400 leading-relaxed">
+              Input range limits on this form (e.g. 30–300cm height, 1–500kg weight) are general sanity bounds for data entry, not clinical cut-offs, and aren't drawn from any source above.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -138,29 +138,24 @@ export const calculateBMI = (
     heightInMeters = height * 0.0254;
   }
 
-  let category = '';
-  const minMultiplier = 18.5;
-  const maxMultiplier = region === 'asia-pacific' ? 22.9 : 24.9;
-
-  if (region === 'who') {
-    if (bmi < 16.0) category = 'Severe thinness';
-    else if (bmi <= 16.9) category = 'Moderate thinness';
-    else if (bmi <= 18.4) category = 'Mild thinness';
-    else if (bmi <= 24.9) category = 'Normal range';
-    else if (bmi <= 29.9) category = 'Pre-obese';
-    else if (bmi <= 34.9) category = 'Obese Class I';
-    else if (bmi <= 39.9) category = 'Obese Class II';
-    else category = 'Obese Class III';
-  } else if (region === 'asia-pacific') {
-    if (bmi < 18.5) category = 'Underweight';
-    else if (bmi <= 22.9) category = 'Normal range';
-    else if (bmi <= 24.9) category = 'Overweight';
-    else if (bmi <= 29.9) category = 'Obesity Class I';
-    else category = 'Obesity Class II';
+  // Category is derived directly from getBMIRanges() rather than duplicated
+  // here by hand. Each range's `max` is the correct continuous cut-off
+  // (e.g. WHO's Moderate/Mild-thinness boundary is exactly 17.0, not 16.9);
+  // walking the list and taking the first range whose max a value is below
+  // finds the right band with no risk of the two ever drifting apart.
+  // ("min" isn't used here — the ranges are contiguous, so the sequential
+  // max-based walk alone is sufficient and exact.)
+  const ranges = getBMIRanges(region);
+  let category = ranges[ranges.length - 1].category;
+  for (const range of ranges) {
+    if (bmi < range.max) {
+      category = range.category;
+      break;
+    }
   }
 
-  let idealWeightMin = minMultiplier * (heightInMeters * heightInMeters);
-  let idealWeightMax = maxMultiplier * (heightInMeters * heightInMeters);
+  let idealWeightMin = 18.5 * (heightInMeters * heightInMeters);
+  let idealWeightMax = (region === 'asia-pacific' ? 22.9 : 24.9) * (heightInMeters * heightInMeters);
 
   if (unit === 'imperial') {
     idealWeightMin = idealWeightMin * 2.20462;

@@ -1269,7 +1269,7 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   <div
                     key={index}
                     ref={isActive ? activeClassificationRowRef : undefined}
-                    className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 sm:px-6 md:px-8 py-4 sm:py-5 transition-all duration-300 relative ${
+                    className={`flex flex-col items-start gap-y-2 sm:flex-row sm:items-center sm:justify-between sm:gap-x-3 pl-6 pr-4 sm:pl-8 sm:pr-6 md:pl-10 md:pr-8 py-4 sm:py-5 transition-all duration-300 relative ${
                       isActive ? 'bg-neutral-50 dark:bg-neutral-700/20 shadow-inner' : 'hover:bg-neutral-50/50 dark:hover:bg-neutral-800/50'
                     } ${isActive && classificationPulse ? 'scale-[1.01]' : ''}`}
                     style={isActive && classificationPulse ? { boxShadow: `inset 0 0 0 2px ${rowColors.hex}` } : undefined}
@@ -1279,11 +1279,14 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                       <div className={`absolute left-0 top-0 w-1.5 h-full ${rowColors.bg}`} />
                     )}
 
-                    {/* Category info stays inline with the range pill
-                        whenever there's room; it only wraps to its own
-                        line if space genuinely runs out (e.g. the active
-                        row's extra "Your Result" tag on a narrow phone). */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-2 min-w-0">
+                    {/* Below `sm`, category info and the range pill are
+                        deliberately stacked as two rows (not left to wrap
+                        organically) so every row — including the active
+                        "Your Result" row with its extra badge — lays out
+                        identically and stays aligned with the row's own
+                        left padding, rather than only sometimes wrapping
+                        depending on how long a given category name is. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
                       <div className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full flex-shrink-0 ${rowColors.bg} shadow-sm`}></div>
                       <span className={`text-base sm:text-lg tracking-tight ${isActive ? 'font-black text-neutral-900 dark:text-white' : 'font-semibold text-neutral-600 dark:text-neutral-400'}`}>
                         {range.category}
@@ -1298,11 +1301,10 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                       )}
                     </div>
                     {/* Range pill: always rendered as a visible tinted chip
-                        (not just when active) so every row reads as a
-                        deliberately designed component. justify-between on
-                        the row (not ml-auto here) keeps it right-aligned
-                        when inline, and left-aligned under the category
-                        info if it ever has to wrap on a very narrow phone. */}
+                        (not just when active). On mobile it sits on its own
+                        row, left-aligned flush with the category info above
+                        it (no stretch, since the row is items-start); from
+                        `sm` up it returns to the same line, right-aligned. */}
                     <span className={`text-sm sm:text-base tracking-wide font-bold px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border whitespace-nowrap ${
                       isActive
                         ? 'bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white border-neutral-200 dark:border-neutral-700 shadow-sm'

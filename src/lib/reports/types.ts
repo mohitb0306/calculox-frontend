@@ -1,3 +1,4 @@
+
 /**
  * Calculator-agnostic "shareable report" contract.
  *
@@ -47,6 +48,16 @@ export interface ShareableReport {
    * field entirely for calculators that don't need an inputs recap.
    */
   pdfOnlySections?: ReportSection[];
+  /**
+   * Optional override of `sections` used ONLY by the PNG image. Use this when
+   * `sections` includes something long/reference-table-like (e.g. every
+   * possible category band) that's valuable in a paginated PDF but makes a
+   * "quick share" image needlessly tall — the image already shows the
+   * matched category via `headlineLabel`. Falls back to `sections` when
+   * omitted, so existing calculators are unaffected. The PDF always uses the
+   * full `sections` (plus `pdfOnlySections`), never this field.
+   */
+  imageSections?: ReportSection[];
   /** Optional footer disclaimer, e.g. "For informational purposes only — not medical advice." */
   disclaimer?: string;
   /** Filename stem (no extension) used for both downloads, e.g. "bmi-result" */

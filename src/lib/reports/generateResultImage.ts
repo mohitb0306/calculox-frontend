@@ -1,3 +1,4 @@
+
 import type { ShareableReport } from './types';
 import type { SiteInfo } from './types';
 
@@ -39,7 +40,7 @@ export const generateResultImage = (report: ShareableReport, siteInfo?: SiteInfo
     }
 
     const drawRows: DrawRow[] = [];
-    report.sections.forEach((section) => {
+    (report.imageSections ?? report.sections).forEach((section) => {
       if (section.heading) drawRows.push({ kind: 'heading', text: section.heading });
       section.rows.forEach((row) => drawRows.push({ kind: 'row', label: row.label, value: row.value }));
     });

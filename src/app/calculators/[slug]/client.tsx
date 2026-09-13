@@ -22,7 +22,7 @@ import { getVisuals } from "@/data/calculatorData";
 const {
   FiSave, FiCheck, FiLoader,
   FiChevronDown, FiChevronUp, FiTag, FiCpu,
-  FiClock, FiImage, FiFileText
+  FiClock, FiImage, FiFileText, FiDownload
 } = FiIcons;
 
 interface ClientProps {
@@ -86,6 +86,29 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   // null means there's nothing to download yet.
   const [currentReport, setCurrentReport] = useState<ShareableReport | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<"image" | "pdf" | null>(null);
+
+  // Mobile-only "Download" dropdown — collapses the PNG/PDF/Save buttons
+  // into one trigger below `sm`, since as three separate buttons they were
+  // squeezing onto the same row as the title on narrow phones instead of
+  // wrapping cleanly. Above `sm`, the original individual buttons are used
+  // instead (see the two action-row variants further down).
+  const [showMobileDownloadMenu, setShowMobileDownloadMenu] = useState(false);
+  const mobileDownloadMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showMobileDownloadMenu) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      if (mobileDownloadMenuRef.current && !mobileDownloadMenuRef.current.contains(e.target as Node)) {
+        setShowMobileDownloadMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [showMobileDownloadMenu]);
   
   const getCalculationDataHandler = useRef<(() => any) | null>(null);
 
@@ -232,8 +255,8 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
         {/* Header — title/icon and download/save actions share one row on
             wider screens (actions right-aligned), wrapping to their own row
             only when the viewport is too narrow to fit both. */}
-        <div className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
-          <div className="flex items-start md:items-center space-x-3 sm:space-x-4 md:space-x-5">
+        <div className="mb-10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-y-4 sm:gap-x-6">
+          <div className="flex items-start md:items-center space-x-3 sm:space-x-4 md:space-x-5 min-w-0">
             <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl bg-gradient-to-br ${currentVisuals.color} flex items-center justify-center shadow-lg shadow-primary-500/20 shrink-0`}>
               <SafeIcon
                 icon={currentVisuals.icon}
@@ -243,7 +266,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
             
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                 <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-neutral-900 dark:text-white tracking-tight">
+                 <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-neutral-900 dark:text-white tracking-tight break-words">
                     {calculator.name}
                  </h1>
                  {calculator.is_featured && (
@@ -258,54 +281,126 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mr-0.5">
-                Download Result
-              </span>
+          <div className="flex items-center gap-2 sm:justify-end">
+              {/* Desktop/tablet (sm and up): full row of individual actions */}
+              <div className="hidden sm:flex items-center gap-2">
+                <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mr-0.5">
+                  Download Result
+                </span>
 
-              <button
-                onClick={() => handleDownloadReport("image")}
-                disabled={!currentReport || downloadingFormat !== null}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
-                title={currentReport ? "Download as PNG image" : "Calculate a result first"}
-              >
-                <SafeIcon
-                  icon={downloadingFormat === "image" ? FiLoader : FiImage}
-                  className={`w-3.5 h-3.5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
-                />
-                <span className="text-xs font-bold">PNG</span>
-              </button>
-
-              <button
-                onClick={() => handleDownloadReport("pdf")}
-                disabled={!currentReport || downloadingFormat !== null}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
-                title={currentReport ? "Download as PDF report" : "Calculate a result first"}
-              >
-                <SafeIcon
-                  icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
-                  className={`w-3.5 h-3.5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
-                />
-                <span className="text-xs font-bold">PDF</span>
-              </button>
-
-              {user && (
-                 <button
-                  onClick={handleSaveToHistory}
-                  disabled={saveState !== "idle"}
-                  className={`p-2 rounded-lg border transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
-                    saveState === "saved"
-                      ? "bg-green-50 border-green-200 text-green-600 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400"
-                      : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200"
-                  }`}
-                  title="Save Calculation"
+                <button
+                  onClick={() => handleDownloadReport("image")}
+                  disabled={!currentReport || downloadingFormat !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
+                  title={currentReport ? "Download as PNG image" : "Calculate a result first"}
                 >
                   <SafeIcon
-                    icon={saveState === "saved" ? FiCheck : FiSave}
-                    className="w-4 h-4"
+                    icon={downloadingFormat === "image" ? FiLoader : FiImage}
+                    className={`w-3.5 h-3.5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
+                  />
+                  <span className="text-xs font-bold">PNG</span>
+                </button>
+
+                <button
+                  onClick={() => handleDownloadReport("pdf")}
+                  disabled={!currentReport || downloadingFormat !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
+                  title={currentReport ? "Download as PDF report" : "Calculate a result first"}
+                >
+                  <SafeIcon
+                    icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
+                    className={`w-3.5 h-3.5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
+                  />
+                  <span className="text-xs font-bold">PDF</span>
+                </button>
+
+                {user && (
+                   <button
+                    onClick={handleSaveToHistory}
+                    disabled={saveState !== "idle"}
+                    className={`p-2 rounded-lg border transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                      saveState === "saved"
+                        ? "bg-green-50 border-green-200 text-green-600 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400"
+                        : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-500 hover:text-primary-600 hover:border-primary-200"
+                    }`}
+                    title="Save Calculation"
+                  >
+                    <SafeIcon
+                      icon={saveState === "saved" ? FiCheck : FiSave}
+                      className="w-4 h-4"
+                    />
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile (below sm): PNG/PDF/Save collapsed into one dropdown
+                  so the action row stays a single compact control instead of
+                  three buttons competing with the title for space. */}
+              <div className="relative ml-auto sm:hidden" ref={mobileDownloadMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowMobileDownloadMenu((v) => !v)}
+                  disabled={!currentReport}
+                  aria-expanded={showMobileDownloadMenu}
+                  aria-haspopup="true"
+                  aria-label="Download or save result"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={currentReport ? "Download or save this result" : "Calculate a result first"}
+                >
+                  <SafeIcon
+                    icon={downloadingFormat ? FiLoader : FiDownload}
+                    className={`w-3.5 h-3.5 ${downloadingFormat ? "animate-spin" : ""}`}
+                  />
+                  <span className="text-xs font-bold">Download</span>
+                  <SafeIcon
+                    icon={FiChevronDown}
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${showMobileDownloadMenu ? "rotate-180" : ""}`}
                   />
                 </button>
-              )}
+
+                {showMobileDownloadMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg z-20 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => { setShowMobileDownloadMenu(false); handleDownloadReport("image"); }}
+                      disabled={!currentReport || downloadingFormat !== null}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <SafeIcon
+                        icon={downloadingFormat === "image" ? FiLoader : FiImage}
+                        className={`w-4 h-4 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
+                      />
+                      PNG Image
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowMobileDownloadMenu(false); handleDownloadReport("pdf"); }}
+                      disabled={!currentReport || downloadingFormat !== null}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors border-t border-neutral-100 dark:border-neutral-700/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <SafeIcon
+                        icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
+                        className={`w-4 h-4 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
+                      />
+                      PDF Report
+                    </button>
+                    {user && (
+                      <button
+                        type="button"
+                        onClick={() => { setShowMobileDownloadMenu(false); handleSaveToHistory(); }}
+                        disabled={saveState !== "idle"}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors border-t border-neutral-100 dark:border-neutral-700/50 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <SafeIcon
+                          icon={saveState === "saved" ? FiCheck : FiSave}
+                          className="w-4 h-4"
+                        />
+                        {saveState === "saved" ? "Saved!" : "Save Calculation"}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
           </div>
         </div>
 

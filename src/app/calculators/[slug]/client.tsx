@@ -20,9 +20,9 @@ import { CalculatorContent } from "@/lib/content";
 import { getVisuals } from "@/data/calculatorData";
 
 const {
-  FiSave, FiCheck, FiLoader,
+  FiSave, FiCheck,
   FiChevronDown, FiChevronUp, FiTag, FiCpu,
-  FiClock, FiImage, FiFileText
+  FiClock, FiShare2, FiCopy
 } = FiIcons;
 
 interface ClientProps {
@@ -86,6 +86,11 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
   // null means there's nothing to download yet.
   const [currentReport, setCurrentReport] = useState<ShareableReport | null>(null);
   const [downloadingFormat, setDownloadingFormat] = useState<"image" | "pdf" | null>(null);
+
+  // Header-level "Share" / "Copy Link" actions — these act on the calculator
+  // PAGE itself (not the calculated result), so they're independent of
+  // currentReport and always available.
+  const [linkCopied, setLinkCopied] = useState(false);
   
   const getCalculationDataHandler = useRef<(() => any) | null>(null);
 
@@ -151,6 +156,42 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
       toast.error("Could not generate the download. Please try again.");
     } finally {
       setDownloadingFormat(null);
+    }
+  };
+
+  const handleShareCalculator = async () => {
+    if (typeof window === "undefined") return;
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: calculator.name,
+      text: calculator.description,
+      url: shareUrl,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (error) {
+      // AbortError fires when the user simply dismisses the native share
+      // sheet — that's not a failure worth surfacing.
+      if ((error as any)?.name !== "AbortError") {
+        toast.error("Could not share this page.");
+      }
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      toast.success("Link copied!");
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (error) {
+      toast.error("Could not copy the link.");
     }
   };
 
@@ -229,9 +270,11 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
           <Breadcrumbs data={breadcrumbData} type="calculator" settings={settings} />
         </div>
 
-        {/* Header — title/icon and download/save actions share one row on
-            wider screens (actions right-aligned), wrapping to their own row
-            only when the viewport is too narrow to fit both. */}
+        {/* Header — title/icon and share/copy-link/save actions share one row
+            on wider screens (actions right-aligned), wrapping to their own
+            row only when the viewport is too narrow to fit both. PNG/PDF
+            downloads now live with the result itself, inside the calculator
+            (see BMICalculator's result header + footer rows). */}
         <div className="mb-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
           <div className="flex items-start md:items-center space-x-3 sm:space-x-4 md:space-x-5">
             <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl bg-gradient-to-br ${currentVisuals.color} flex items-center justify-center shadow-lg shadow-primary-500/20 shrink-0`}>
@@ -259,34 +302,22 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
           </div>
 
           <div className="flex items-center gap-2">
-              <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mr-0.5">
-                Download Result
-              </span>
-
               <button
-                onClick={() => handleDownloadReport("image")}
-                disabled={!currentReport || downloadingFormat !== null}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
-                title={currentReport ? "Download as PNG image" : "Calculate a result first"}
+                onClick={handleShareCalculator}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer"
+                title="Share this calculator"
               >
-                <SafeIcon
-                  icon={downloadingFormat === "image" ? FiLoader : FiImage}
-                  className={`w-3.5 h-3.5 ${downloadingFormat === "image" ? "animate-spin" : ""}`}
-                />
-                <span className="text-xs font-bold">PNG</span>
+                <SafeIcon icon={FiShare2} className="w-3.5 h-3.5" />
+                <span className="text-xs font-bold">Share</span>
               </button>
 
               <button
-                onClick={() => handleDownloadReport("pdf")}
-                disabled={!currentReport || downloadingFormat !== null}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:active:scale-100"
-                title={currentReport ? "Download as PDF report" : "Calculate a result first"}
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer"
+                title="Copy link to this calculator"
               >
-                <SafeIcon
-                  icon={downloadingFormat === "pdf" ? FiLoader : FiFileText}
-                  className={`w-3.5 h-3.5 ${downloadingFormat === "pdf" ? "animate-spin" : ""}`}
-                />
-                <span className="text-xs font-bold">PDF</span>
+                <SafeIcon icon={linkCopied ? FiCheck : FiCopy} className="w-3.5 h-3.5" />
+                <span className="text-xs font-bold">{linkCopied ? "Copied" : "Copy Link"}</span>
               </button>
 
               {user && (
@@ -318,7 +349,9 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
                   {renderCalculatorComponent(calculator.slug, {
                       onRegisterSaveHandler: registerSaveHandler,
                       onCalculationComplete: handleCalculationComplete,
-                      onReportChange: setCurrentReport
+                      onReportChange: setCurrentReport,
+                      onDownloadReport: handleDownloadReport,
+                      downloadingFormat: downloadingFormat
                   })}
                 </div>
                 

@@ -7,7 +7,7 @@ import * as FiIcons from 'react-icons/fi';
 import { calculateBMI, getBMIRanges, validateBMIInput, validateWaistInput, calculateWaistMetrics, getBMIInsight, getGenderContextNote, generateBMIGrid, BMIUnit, BMIRegion } from '@/utils/calculators/bmiLogic';
 import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2 } = FiIcons;
+const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiDownload, FiRotateCcw, FiCheckCircle, FiExternalLink } = FiIcons;
 
 interface BMICalculatorProps {
   onCalculationComplete?: () => void;
@@ -20,6 +20,14 @@ interface BMICalculatorProps {
    * where those download/share icons live.
    */
   onReportChange?: (report: ShareableReport | null) => void;
+  /** Triggers the PNG/PDF download for the current report — implemented by
+   * the parent page (it owns generateResultImage/generateResultPdf), passed
+   * down so BMICalculator can render its own download buttons in-flow with
+   * the result. */
+  onDownloadReport?: (format: 'image' | 'pdf') => void;
+  /** Which format is currently being generated, if any — drives the spinner
+   * on whichever button was clicked and disables both while in progress. */
+  downloadingFormat?: 'image' | 'pdf' | null;
 }
 
 // --- DYNAMIC PREMIUM COLOR MAPPER ---
@@ -81,7 +89,7 @@ const BMI_SOURCES: SourceEntry[] = [
   },
   {
     metric: 'Global (WHO) BMI Classification',
-    citation: "The 8-tier classification, from Severe Thinness through Obese Class III, combines WHO's 1995 Expert Committee report (Technical Report Series 854 \u2014 thinness grades, normal range, overweight/obese cut-offs) with WHO's 2000 report Obesity: Preventing and Managing the Global Epidemic (Technical Report Series 894), which added the Pre-obese label and split obesity into Class I/II/III. WHO's original interactive classification page (formerly apps.who.int/bmi) has been retired; the linked WHO page documents the same underlying cut-offs in a condensed form.",
+    citation: "WHO's 8-tier classification — Severe Thinness through Obese Class III — combines its 1995 Expert Committee report (Technical Report Series 854) with the 2000 report Obesity: Preventing and Managing the Global Epidemic (Technical Report Series 894), which added Pre-obese and split obesity into Classes I\u2013III.",
     url: 'https://apps.who.int/nutrition/landscape/help.aspx?menu=0&helpid=420',
     linkLabel: 'World Health Organization \u2014 BMI (NLiS)',
   },
@@ -107,13 +115,13 @@ const BMI_SOURCES: SourceEntry[] = [
   },
   {
     metric: 'Waist-to-Height Ratio Bands',
-    citation: '0.40\u20130.49 (healthy) / 0.50\u20130.59 (increased risk) / \u22650.60 (high risk) are NICE\u2019s official central-adiposity bands \u2014 first introduced in a 2022 update and current in guideline NG246 (2025). The additional <0.40 "Slim" band below NICE\u2019s range is not part of NICE\u2019s guidance; it reflects Margaret Ashwell\u2019s original 1996 waist-to-height "traffic light" concept (the basis NICE\u2019s own guidance builds on), which set 0.4 as the start of the "OK" zone.',
+    citation: '0.40\u20130.49 (healthy), 0.50\u20130.59 (increased risk), and \u22650.60 (high risk) are NICE\u2019s official central-adiposity bands, current in guideline NG246 (2025). The additional <0.40 "Slim" band isn\u2019t part of NICE\u2019s guidance \u2014 it reflects Margaret Ashwell\u2019s original 1996 waist-to-height concept that NICE\u2019s own guidance builds on.',
     url: 'https://www.nice.org.uk/guidance/ng246/chapter/Identifying-and-assessing-overweight-obesity-and-central-adiposity',
     linkLabel: 'NICE Guideline NG246 \u2014 Waist-to-height ratio thresholds',
   },
   {
-    metric: 'WHO Waist-Circumference Risk (94/102cm men, 80/88cm women)',
-    citation: "World Health Organization's official sex-specific waist-circumference cut-offs for increased and substantially increased metabolic risk.",
+    metric: 'WHO Waist-Circumference Risk',
+    citation: "World Health Organization's official sex-specific waist-circumference cut-offs: 94cm (men) / 80cm (women) for increased risk, 102cm (men) / 88cm (women) for substantially increased metabolic risk.",
     url: 'https://iris.who.int/handle/10665/44583',
     linkLabel: 'WHO Expert Consultation (2008) \u2014 Waist Circumference and Waist-Hip Ratio',
   },
@@ -209,7 +217,7 @@ const InfoTip: React.FC<{ text: string; widthClass?: string }> = ({ text, widthC
   );
 };
 
-const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange }) => {
+const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null }) => {
   const prefersReducedMotion = useReducedMotion();
   
   // State
@@ -251,6 +259,8 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
 
   // Expand/collapse state for the Sources panel below the Disclaimer.
   const [showSources, setShowSources] = useState<boolean>(false);
+  const sourcesPanelRef = useRef<HTMLDivElement | null>(null);
+  const [sourcesPulse, setSourcesPulse] = useState<boolean>(false);
 
   // Anchor for the "jump to result" scroll after Calculate is pressed — no
   // spinner/loading state on the button itself, just a smooth scroll once
@@ -610,6 +620,43 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     onReportChange?.(report);
   }, [report, onReportChange]);
 
+  // Shared PNG/PDF download buttons — rendered once inside the "Report"
+  // header card at the top of the result, and again in the compact footer
+  // bar below the Detailed Classification table. Both share the exact same
+  // neutral outline treatment — no accent/filled color on either — and are
+  // differentiated only by icon + label, not by visual weight.
+  const renderDownloadButtons = () => (
+    <div className="flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={() => onDownloadReport?.('image')}
+        disabled={!report || downloadingFormat !== null}
+        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-md transition-all duration-200 active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:hover:shadow-sm disabled:active:scale-100"
+        title={report ? "Download as PNG image" : "Calculate a result first"}
+      >
+        <SafeIcon
+          icon={downloadingFormat === 'image' ? FiLoader : FiImage}
+          className={`w-4 h-4 ${downloadingFormat === 'image' ? 'animate-spin' : ''}`}
+        />
+        <span className="text-xs font-bold tracking-wide">PNG</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onDownloadReport?.('pdf')}
+        disabled={!report || downloadingFormat !== null}
+        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-md transition-all duration-200 active:scale-[0.97] shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-neutral-600 disabled:hover:border-neutral-200 disabled:hover:shadow-sm disabled:active:scale-100"
+        title={report ? "Download as PDF report" : "Calculate a result first"}
+      >
+        <SafeIcon
+          icon={downloadingFormat === 'pdf' ? FiLoader : FiFileText}
+          className={`w-4 h-4 ${downloadingFormat === 'pdf' ? 'animate-spin' : ''}`}
+        />
+        <span className="text-xs font-bold tracking-wide">PDF</span>
+      </button>
+    </div>
+  );
+
   const noSpinnerClass = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   const getWeightStatusSubtext = () => {
@@ -626,6 +673,30 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
     });
     setClassificationPulse(true);
     window.setTimeout(() => setClassificationPulse(false), 1600);
+  };
+
+  // Opening the Sources panel brings it into view (so the user isn't left
+  // staring at a now-taller page with the new content below the fold) and
+  // gives it one brief highlight pulse to draw the eye — same pattern as
+  // handleJumpToClassification above. Deliberately does NOT auto-scroll
+  // through the content or auto-close it: the user stays in control of
+  // reading and dismissing it, same as every other disclosure widget in
+  // this app (and on the web generally).
+  const toggleSources = () => {
+    setShowSources((prev) => {
+      const next = !prev;
+      if (next) {
+        window.setTimeout(() => {
+          sourcesPanelRef.current?.scrollIntoView({
+            behavior: prefersReducedMotion ? 'auto' : 'smooth',
+            block: 'start',
+          });
+        }, 50);
+        setSourcesPulse(true);
+        window.setTimeout(() => setSourcesPulse(false), 1600);
+      }
+      return next;
+    });
   };
 
   return (
@@ -888,16 +959,22 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           type="button"
           onClick={handleClear}
           disabled={isClearDisabled}
-          className="w-full md:w-auto px-8 py-3.5 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all duration-200 active:scale-[0.97] focus:outline-none focus:ring-4 focus:ring-neutral-500/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+          className="group relative w-full md:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-sm font-semibold tracking-normal rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-[0_1px_2px_rgba(15,23,42,0.06)] hover:bg-neutral-50 dark:hover:bg-neutral-700/60 hover:border-neutral-300 dark:hover:border-neutral-600 hover:text-neutral-900 dark:hover:text-white hover:shadow-[0_2px_6px_rgba(15,23,42,0.08)] transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-neutral-800 disabled:active:scale-100"
         >
+          <SafeIcon icon={FiRotateCcw} className="w-4 h-4 text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 group-hover:-rotate-45 transition-all duration-200" />
           Clear
         </button>
         <button
           type="button"
           onClick={handleCalculate}
           disabled={isCalculateDisabled}
-          className="w-full md:w-auto px-12 py-3.5 bg-indigo-600 hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold uppercase tracking-wider rounded-xl shadow-[0_4px_14px_0_rgb(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] transition-all duration-200 active:scale-[0.97] focus:outline-none focus:ring-4 focus:ring-indigo-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100"
+          style={{
+            background: 'linear-gradient(180deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%)',
+            boxShadow: '0 10px 20px -6px rgba(79,70,229,0.45), 0 4px 8px -2px rgba(79,70,229,0.25)',
+          }}
+          className="group relative w-full md:w-auto inline-flex items-center justify-center gap-2 px-10 py-3.5 text-white text-sm font-semibold tracking-normal rounded-lg hover:brightness-[1.08] active:scale-[0.98] active:brightness-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
         >
+          <SafeIcon icon={FiCheckCircle} className="w-4 h-4" />
           Calculate
         </button>
       </div>
@@ -957,6 +1034,31 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
             </div>
           ) : (
           <>
+          {/* RESULT HEADER CARD — a self-contained "Report" banner rather
+              than bare text + buttons floating under the Calculate button.
+              The left accent bar + tinted icon chip both pick up the
+              matched category's color (currentColors), so the card visually
+              ties itself to the result beneath it. */}
+          <div className={`relative overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-gradient-to-r from-neutral-50 to-white dark:from-neutral-800 dark:to-neutral-800/60 shadow-sm mb-2`}>
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${currentColors.bg}`} />
+            <div className="flex flex-wrap items-center justify-between gap-4 pl-5 pr-4 sm:pl-6 sm:pr-6 py-3 sm:py-3.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shadow-sm ${currentColors.bgLight} ${currentColors.text}`}>
+                  <SafeIcon icon={FiDownload} className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-extrabold text-neutral-900 dark:text-white tracking-tight leading-snug truncate">
+                    Your Personalized BMI Report
+                  </h3>
+                  <p className="text-xs sm:text-sm font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    Save a snapshot or the full report below
+                  </p>
+                </div>
+              </div>
+              {renderDownloadButtons()}
+            </div>
+          </div>
+
           {/* ELITE 4K SVG GAUGE & OVERLAY (Compact Profile) */}
           <div
             className="bg-white dark:bg-neutral-800 rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] relative overflow-hidden flex flex-col items-center"
@@ -1029,7 +1131,13 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
                   className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full border transition-colors cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
                   style={{ borderColor: currentColors.hex, color: currentColors.hex }}
                 >
-                  <SafeIcon icon={FiArrowDown} className="w-3.5 h-3.5" />
+                  <motion.span
+                    className="inline-flex"
+                    animate={prefersReducedMotion ? undefined : { y: [0, 3, 0] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <SafeIcon icon={FiArrowDown} className="w-3.5 h-3.5" />
+                  </motion.span>
                   See in Classification Table
                 </button>
               </div>
@@ -1317,6 +1425,18 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
               })}
             </div>
           </div>
+
+          {/* Same download actions repeated below the full classification
+              table — styled as a smaller closing bar (not a full duplicate
+              of the header banner) so it reads as "here's that action again"
+              rather than a second competing header. Kept within reach after
+              scrolling through a long result. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/70 dark:bg-neutral-900/40 px-5 sm:px-6 py-4">
+            <span className="text-sm font-bold text-neutral-600 dark:text-neutral-300">
+              Download your full report
+            </span>
+            {renderDownloadButtons()}
+          </div>
           </>
           )}
         </motion.div>
@@ -1333,49 +1453,73 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
           source, for transparency and compliance. Collapsed by default
           since it's a reference list rather than something most users need
           open every visit, but always one tap away rather than buried on a
-          separate page. */}
-      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden">
+          separate page. Numbered like a reference list so each citation
+          reads as a discrete, verifiable entry rather than a wall of text.
+          Every outbound link opens in a new tab and carries rel="nofollow"
+          (in addition to noopener/noreferrer for tab-hijacking protection)
+          since these are third-party sites this app doesn't control and
+          isn't vouching for in a ranking sense — Google's own guidance for
+          this exact case. */}
+      <div
+        ref={sourcesPanelRef}
+        style={sourcesPulse ? { boxShadow: '0 0 0 3px rgba(99,102,241,0.35)' } : undefined}
+        className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden transition-shadow duration-300"
+      >
         <button
           type="button"
-          onClick={() => setShowSources((v) => !v)}
+          onClick={toggleSources}
           aria-expanded={showSources}
-          className="w-full flex items-center justify-between gap-3 p-6 text-left cursor-pointer"
+          className="w-full flex items-center justify-between gap-3 p-6 text-left cursor-pointer hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40 transition-colors duration-150"
         >
-          <span className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-baseline gap-2 flex-wrap">
             <strong className="text-neutral-900 dark:text-neutral-200 font-bold">Sources</strong>
-            <span className="font-normal text-neutral-500 dark:text-neutral-500">— every formula and threshold used above, cited</span>
+            <span className="font-normal text-neutral-500 dark:text-neutral-500 text-[13px]">
+              {BMI_SOURCES.length} references — every formula and threshold used above, cited
+            </span>
           </span>
           <SafeIcon
             icon={FiArrowDown}
-            className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${showSources ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 flex-shrink-0 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-out ${showSources ? 'rotate-180' : ''}`}
           />
         </button>
-        {showSources && (
-          <div className="px-6 pb-6 space-y-4">
-            {BMI_SOURCES.map((source, i) => (
-              <div
-                key={source.metric}
-                className={i === 0 ? '' : 'pt-4 border-t border-neutral-200/70 dark:border-neutral-800'}
-              >
-                <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
-                <p className="leading-relaxed mt-1">{source.citation}</p>
-                {source.url && (
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-2 text-primary-600 dark:text-primary-400 hover:underline font-semibold"
-                  >
-                    {source.linkLabel ?? 'View source'}
-                  </a>
-                )}
-              </div>
-            ))}
-            <p className="pt-4 border-t border-neutral-200/70 dark:border-neutral-800 text-xs text-neutral-400 leading-relaxed">
+        <motion.div
+          initial={false}
+          animate={{ height: showSources ? 'auto' : 0 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeOut' }}
+          style={{ overflow: 'hidden' }}
+          aria-hidden={!showSources}
+        >
+          <div className="px-6 pb-6">
+            <ol className="list-none space-y-4 divide-y divide-neutral-200/70 dark:divide-neutral-800">
+              {BMI_SOURCES.map((source, i) => (
+                <li key={source.metric} className="flex gap-3 pt-4 first:pt-0 first:mt-0">
+                  <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 text-[10px] font-bold flex items-center justify-center tabular-nums">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
+                    <p className="leading-relaxed mt-1 text-neutral-600 dark:text-neutral-400">{source.citation}</p>
+                    {source.url && (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="nofollow noopener noreferrer"
+                        tabIndex={showSources ? 0 : -1}
+                        className="group inline-flex items-center gap-1.5 mt-2.5 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-semibold text-[13px]"
+                      >
+                        <span className="underline-offset-2 group-hover:underline">{source.linkLabel ?? 'View source'}</span>
+                        <SafeIcon icon={FiExternalLink} className="w-3 h-3 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="pt-4 mt-4 border-t border-neutral-200/70 dark:border-neutral-800 text-xs text-neutral-400 leading-relaxed">
               Input range limits on this form (e.g. 30–300cm height, 1–500kg weight) are general sanity bounds for data entry, not clinical cut-offs, and aren't drawn from any source above.
             </p>
           </div>
-        )}
+        </motion.div>
       </div>
     </div>
   );

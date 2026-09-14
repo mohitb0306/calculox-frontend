@@ -5,7 +5,6 @@ import { FiTool } from "react-icons/fi"; // Import the specific icon used in the
 import SafeIcon from "@/components/common/SafeIcon";
 import EMICalculator from "./EMICalculator";
 import BMICalculator from "./BMICalculator";
-import ChildBMICalculator from "./ChildBMICalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
@@ -27,11 +26,6 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "bmi":
     case "bmi-calculator":
         return <BMICalculator {...props} />;
-
-    case "child-bmi":
-    case "kids-bmi":
-    case "child-bmi-calculator":
-        return <ChildBMICalculator {...props} />;
 
     case "sip": 
     case "sip-calculator":

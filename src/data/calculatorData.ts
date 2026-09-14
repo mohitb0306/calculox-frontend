@@ -104,6 +104,15 @@ export const calculatorData: CalculatorItem[] = [
     color: 'from-teal-500 to-teal-600'
   },
   {
+    id: 'child-bmi',
+    name: 'Child & Teen BMI Calculator',
+    description: 'Calculate BMI percentile for children and teens using WHO growth references',
+    category: 'Health',
+    icon: FiHeart,
+    featured: true,
+    color: 'from-cyan-500 to-cyan-600'
+  },
+  {
     id: 'bmr',
     name: 'BMR Calculator',
     description: 'Calculate your Basal Metabolic Rate',
@@ -226,6 +235,11 @@ export const calculatorVisuals: CalculatorVisuals[] = [
   { id: 'roi', icon: FiBarChart, color: 'from-indigo-500 to-indigo-600' },
   { id: 'compound', icon: FiPieChart, color: 'from-pink-500 to-pink-600' },
   { id: 'tax', icon: FiDollarSign, color: 'from-red-500 to-red-600' },
+  // NOTE: 'child-bmi' is listed before 'bmi' on purpose. getVisuals() below matches
+  // using `slug.includes(c.id)` as a fallback, so if 'bmi' were checked first, the
+  // slug "child-bmi" would incorrectly match it (since "child-bmi".includes("bmi")
+  // is true) before ever reaching this entry. Keep this one above 'bmi'.
+  { id: 'child-bmi', icon: FiHeart, color: 'from-cyan-500 to-cyan-600' },
   { id: 'bmi', icon: FiActivity, color: 'from-teal-500 to-teal-600' },
   { id: 'bmr', icon: FiHeart, color: 'from-rose-500 to-rose-600' },
   { id: 'calorie', icon: FiTarget, color: 'from-emerald-500 to-emerald-600' },

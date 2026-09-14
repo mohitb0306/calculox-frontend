@@ -22,7 +22,7 @@ import { getVisuals } from "@/data/calculatorData";
 const {
   FiSave, FiCheck,
   FiChevronDown, FiChevronUp, FiTag, FiCpu,
-  FiClock, FiShare2, FiCopy
+  FiClock
 } = FiIcons;
 
 interface ClientProps {
@@ -195,6 +195,16 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     }
   };
 
+  // Opens the user's default mail client with the calculator link pre-filled
+  // — used by the "Like this? Please share" mail icon rendered alongside the
+  // result (see BMICalculator's share bar, above the disclaimer).
+  const handleEmailShare = () => {
+    if (typeof window === "undefined") return;
+    const subject = encodeURIComponent(calculator.name);
+    const body = encodeURIComponent(`${calculator.description ?? ""}\n\n${window.location.href}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
   const handleSaveToHistory = async () => {
     if (!user) {
       toast.error("Please log in to save your history.");
@@ -302,24 +312,10 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
           </div>
 
           <div className="flex items-center gap-2">
-              <button
-                onClick={handleShareCalculator}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer"
-                title="Share this calculator"
-              >
-                <SafeIcon icon={FiShare2} className="w-3.5 h-3.5" />
-                <span className="text-xs font-bold">Share</span>
-              </button>
-
-              <button
-                onClick={handleCopyLink}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-primary-600 hover:border-primary-200 dark:hover:border-primary-800 transition-all active:scale-[0.97] shadow-sm cursor-pointer"
-                title="Copy link to this calculator"
-              >
-                <SafeIcon icon={linkCopied ? FiCheck : FiCopy} className="w-3.5 h-3.5" />
-                <span className="text-xs font-bold">{linkCopied ? "Copied" : "Copy Link"}</span>
-              </button>
-
+              {/* Share / Copy Link moved out of this header — they now live
+                  in the "Like this? Please share" bar next to the result
+                  (see BMICalculator, above the disclaimer), closer to the
+                  content people actually want to share. */}
               {user && (
                  <button
                   onClick={handleSaveToHistory}
@@ -351,7 +347,11 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
                       onCalculationComplete: handleCalculationComplete,
                       onReportChange: setCurrentReport,
                       onDownloadReport: handleDownloadReport,
-                      downloadingFormat: downloadingFormat
+                      downloadingFormat: downloadingFormat,
+                      onShare: handleShareCalculator,
+                      onEmailShare: handleEmailShare,
+                      onCopyLink: handleCopyLink,
+                      linkCopied: linkCopied
                   })}
                 </div>
                 

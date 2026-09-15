@@ -9,6 +9,8 @@ import {
   calculateBMR,
   calculateTDEE,
   getGoalCalories,
+  getLifeStageAdjustment,
+  applyLifeStageAddition,
   validateBMRInput,
   validateBodyFatInput,
   BMRUnit,
@@ -17,6 +19,9 @@ import {
   BMRResult,
   TDEEEntry,
   GoalCalorieEntry,
+  LifeStage,
+  PregnancyTrimester,
+  BreastfeedingStage,
   BMR_SOURCES,
 } from '@/utils/calculators/bmrLogic';
 import type { ShareableReport } from '@/lib/reports/types';
@@ -177,6 +182,14 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   const [bodyFat, setBodyFat] = useState<number | string>('');
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
+  // Life Stage — optional, additive-only on top of TDEE/goal numbers.
+  // Deliberately NOT part of resetCalculation()/handleCalculate() gating:
+  // it doesn't affect the BMR/TDEE math itself, so it can be changed
+  // freely before or after a calculation without invalidating the result.
+  const [lifeStage, setLifeStage] = useState<LifeStage>('none');
+  const [trimester, setTrimester] = useState<PregnancyTrimester>('first');
+  const [breastfeedingStage, setBreastfeedingStage] = useState<BreastfeedingStage>('months_1_6');
+
   const [hasCalculated, setHasCalculated] = useState(false);
   const [result, setResult] = useState<BMRResult | null>(null);
   const [tdeeRows, setTdeeRows] = useState<TDEEEntry[]>([]);
@@ -255,6 +268,9 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
     setBodyFat('');
     setActivityLevel('moderate');
     setUnit('imperial');
+    setLifeStage('none');
+    setTrimester('first');
+    setBreastfeedingStage('months_1_6');
     resetCalculation();
   };
 
@@ -368,6 +384,14 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   const activeTdeeEntry = useMemo(
     () => tdeeRows.find((t) => t.level === activityLevel) ?? null,
     [tdeeRows, activityLevel]
+  );
+
+  // Purely additive on top of the goal-calorie numbers below — computed
+  // independently of handleCalculate so changing it never invalidates or
+  // recalculates the base BMR/TDEE/goal figures.
+  const lifeStageAdjustment = useMemo(
+    () => getLifeStageAdjustment(lifeStage, trimester, breastfeedingStage),
+    [lifeStage, trimester, breastfeedingStage]
   );
 
   // --- SHAREABLE REPORT ---
@@ -785,6 +809,84 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
         </div>
       </div>
 
+      <hr className="border-t border-neutral-200 dark:border-neutral-800" />
+
+      {/* SECTION 5: Life Stage — optional, adds on top of the goal-calorie
+          numbers below rather than altering the base calculation */}
+      <div className="max-w-2xl mx-auto">
+        <label className="flex items-center justify-center md:justify-start gap-1.5 text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5">
+          Life Stage
+          <span className="text-xs font-semibold text-neutral-400 normal-case">— Optional</span>
+          <InfoTip
+            widthClass="w-64"
+            text="Pregnancy and breastfeeding have official calorie additions (ACOG/USDA) shown on top of your goal targets below. PCOS and perimenopause show an educational note only — there's no universal calorie adjustment for either."
+          />
+        </label>
+        <div className="relative">
+          <select
+            value={lifeStage}
+            onChange={(e) => setLifeStage(e.target.value as LifeStage)}
+            className="w-full appearance-none rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white px-3.5 py-3 pr-10 shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-500 cursor-pointer"
+          >
+            <option value="none">None</option>
+            <option value="pregnant">Pregnant</option>
+            <option value="breastfeeding">Breastfeeding</option>
+            <option value="pcos">PCOS</option>
+            <option value="perimenopause">Perimenopause</option>
+          </select>
+          <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+        </div>
+
+        {lifeStage === 'pregnant' && (
+          <div className="mt-3 flex bg-neutral-200 dark:bg-neutral-700 p-1 rounded-lg" role="group" aria-label="Trimester selection">
+            {(['first', 'second', 'third'] as PregnancyTrimester[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={trimester === t}
+                onClick={() => setTrimester(t)}
+                className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer ${
+                  trimester === t ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'
+                }`}
+              >
+                {t === 'first' ? '1st Trimester' : t === 'second' ? '2nd Trimester' : '3rd Trimester'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {lifeStage === 'breastfeeding' && (
+          <div className="mt-3 flex bg-neutral-200 dark:bg-neutral-700 p-1 rounded-lg" role="group" aria-label="Breastfeeding stage selection">
+            {(['months_1_6', 'months_7_12'] as BreastfeedingStage[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={breastfeedingStage === s}
+                onClick={() => setBreastfeedingStage(s)}
+                className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer ${
+                  breastfeedingStage === s ? 'bg-white dark:bg-neutral-600 shadow-sm text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400'
+                }`}
+              >
+                {s === 'months_1_6' ? 'Months 1–6' : 'Months 7–12'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {lifeStage === 'pregnant' && trimester === 'first' && lifeStageAdjustment.note && (
+          <p className="mt-2.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
+            {lifeStageAdjustment.note}
+          </p>
+        )}
+
+        {(lifeStage === 'pcos' || lifeStage === 'perimenopause') && lifeStageAdjustment.note && (
+          <div className="mt-3 flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
+            <SafeIcon icon={FiInfo} className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <p className="text-sm font-medium leading-relaxed">{lifeStageAdjustment.note}</p>
+          </div>
+        )}
+      </div>
+
       {/* Action Buttons */}
       <div ref={actionButtonsRef} className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-4">
         <button
@@ -973,12 +1075,26 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
 
           {/* GOAL-BASED CALORIE TARGETS */}
           <div>
-            <h3 className="text-xl font-extrabold text-neutral-900 dark:text-white mb-1">
+            <h3 className="flex items-center gap-1.5 text-xl font-extrabold text-neutral-900 dark:text-white mb-1">
               Goal-Based Calorie Targets
+              <InfoTip
+                widthClass="w-64"
+                text="Macro grams use the NASEM/USDA Acceptable Macronutrient Distribution Range (Protein 10–35%, Carbs 45–65%, Fat 20–35% of calories), with a specific percentage chosen per goal within those official bounds."
+              />
             </h3>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
               Based on your {activeTdeeEntry?.label ?? 'selected'} TDEE of {activeTdeeEntry ? formatKcal(activeTdeeEntry.calories) : '\u2014'}/day. Uses the standard ~7,700 kcal \u2248 1 kg conversion \u2014 an approximation, not a guarantee.
             </p>
+
+            {lifeStageAdjustment.calorieAddition > 0 && (
+              <div className="flex items-start gap-3 p-4 mb-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300">
+                <SafeIcon icon={FiInfo} className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="text-sm font-medium leading-relaxed">
+                  <strong>+{lifeStageAdjustment.calorieAddition} kcal/day</strong> for {lifeStageAdjustment.label} is added on top of each target below, shown as its "Adjusted total" — the base targets themselves are unchanged.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {goalRows.map((g) => {
                 const style = GOAL_STYLES[g.goal];
@@ -1008,6 +1124,42 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                         {g.expectedChangePerWeekKg !== 0 && (
                           <> · \u2248 {g.expectedChangePerWeekKg > 0 ? '+' : ''}{g.expectedChangePerWeekKg.toFixed(2)} kg/week</>
                         )}
+                      </p>
+                    )}
+
+                    {/* MACRO BREAKDOWN — AMDR-based grams for this goal */}
+                    <div className="mt-3 pt-3 border-t border-neutral-200/70 dark:border-neutral-700/50 grid grid-cols-3 gap-2">
+                      <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                          Protein <span className="normal-case font-semibold">({g.macros.proteinPct}%)</span>
+                        </p>
+                        <p className="text-sm font-extrabold text-neutral-800 dark:text-neutral-100">
+                          {Math.round(g.macros.proteinGrams)}g
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                          Carbs <span className="normal-case font-semibold">({g.macros.carbsPct}%)</span>
+                        </p>
+                        <p className="text-sm font-extrabold text-neutral-800 dark:text-neutral-100">
+                          {Math.round(g.macros.carbsGrams)}g
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                          Fat <span className="normal-case font-semibold">({g.macros.fatPct}%)</span>
+                        </p>
+                        <p className="text-sm font-extrabold text-neutral-800 dark:text-neutral-100">
+                          {Math.round(g.macros.fatGrams)}g
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* LIFE-STAGE ADDITION — additive only, base dailyCalories above is unchanged */}
+                    {lifeStageAdjustment.calorieAddition > 0 && (
+                      <p className="mt-3 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        Adjusted total: {formatKcal(applyLifeStageAddition(g.dailyCalories, lifeStageAdjustment))}/day
+                        <span className="font-semibold text-indigo-500 dark:text-indigo-300"> (+{lifeStageAdjustment.calorieAddition})</span>
                       </p>
                     )}
                   </div>

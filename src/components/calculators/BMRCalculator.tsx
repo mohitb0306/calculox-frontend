@@ -957,7 +957,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
           )}
 
           {/* PRIMARY HEADLINE CARD */}
-          <div className={`bg-gradient-to-br ${confidenceColors.grad} rounded-3xl p-6 sm:p-8 border shadow-sm text-center`}>
+          <div className={`bg-gradient-to-br ${confidenceColors.grad} rounded-3xl p-6 sm:p-8 border shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] text-center`}>
             <p className="text-sm font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
               Mifflin-St Jeor (Primary)
             </p>
@@ -979,18 +979,28 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             </div>
           )}
 
-          {/* CONFIDENCE / INSIGHT */}
-          <div className="flex items-start gap-3 p-4 sm:p-5 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-800">
-            <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${confidenceColors.bgLight}`}>
-              <SafeIcon icon={FiShield} className={`w-4 h-4 ${confidenceColors.text}`} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                Spread across formulas: {Math.round(result.spreadKcal)} kcal
-              </p>
-              <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                {result.confidenceNote}
-              </p>
+          {/* CONFIDENCE / INSIGHT — rebuilt to match the "Wellness Overview"
+              card language from BMICalculator.tsx: bg-slate-50 card, colored
+              left accent bar tied to the same confidence color as the
+              headline above, a 12x12 white icon chip, an uppercase eyebrow
+              label, and the interpretive sentence as the lead paragraph with
+              the numeric fact demoted to a footnote below a divider — rather
+              than the flatter single-tone box this used before. */}
+          <div className="relative overflow-hidden rounded-3xl p-5 sm:p-6 md:p-8 border border-neutral-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 shadow-md group">
+            <div className={`absolute top-0 left-0 w-1.5 h-full transition-colors duration-300 ${confidenceColors.bg}`} />
+            <div className="relative z-10 flex flex-col md:flex-row items-start gap-4">
+              <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 ${confidenceColors.text}`}>
+                <SafeIcon icon={FiShield} className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">Confidence &amp; Insight</h3>
+                <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed font-normal text-[15px] md:text-base">
+                  {result.confidenceNote}
+                </p>
+                <p className="text-xs font-normal text-neutral-500 dark:text-neutral-400 leading-relaxed mt-3 pt-3 border-t border-neutral-200/70 dark:border-neutral-700/50">
+                  Spread across formulas: <strong className="font-bold text-neutral-700 dark:text-neutral-300">{Math.round(result.spreadKcal)} kcal</strong>
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1106,7 +1116,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                 const cardBg = g.isUnsafeLow ? 'bg-red-50 dark:bg-red-900/20' : style.bgLight;
                 const cardBorder = g.isUnsafeLow ? 'border-red-300 dark:border-red-800' : style.border;
                 return (
-                  <div key={g.goal} className={`rounded-2xl border p-5 ${cardBg} ${cardBorder}`}>
+                  <div key={g.goal} className={`rounded-2xl border p-5 shadow-sm hover:shadow-md transition-shadow ${cardBg} ${cardBorder}`}>
                     <div className="flex items-center gap-2 mb-2">
                       <SafeIcon icon={g.isUnsafeLow ? FiAlertCircle : style.icon} className={`w-4 h-4 ${cardText}`} />
                       <h4 className={`text-sm font-bold uppercase tracking-wider ${cardText}`}>{g.label}</h4>

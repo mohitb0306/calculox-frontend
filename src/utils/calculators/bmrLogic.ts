@@ -53,6 +53,18 @@ export interface TDEEEntry {
   calories: number; // primaryBmr * multiplier
 }
 
+/** Macro split (grams + %) for a given calorie total, kept within the
+ *  NASEM/USDA AMDR — see MACRO_SPLIT_BY_GOAL for the exact source and the
+ *  reasoning behind each goal's chosen percentages. */
+export interface MacroBreakdown {
+  proteinPct: number;
+  carbsPct: number;
+  fatPct: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+}
+
 export interface GoalCalorieEntry {
   goal: BMRGoal;
   label: string; // e.g. "Mild Weight Loss"
@@ -65,6 +77,34 @@ export interface GoalCalorieEntry {
   isUnsafeLow?: boolean;
   /** Human-readable warning text, present only when isUnsafeLow is true. */
   safetyWarning?: string;
+  /** Protein/carb/fat split for this tier's dailyCalories. Always present,
+   *  always within the official AMDR bounds. */
+  macros: MacroBreakdown;
+}
+
+// --- LIFE-STAGE ADJUSTMENTS ---
+// Optional, additive-only adjustments layered on top of the base TDEE/goal
+// numbers above. See getLifeStageAdjustment() for the cited figures.
+
+export type LifeStage = 'none' | 'pregnant' | 'breastfeeding' | 'pcos' | 'perimenopause';
+export type PregnancyTrimester = 'first' | 'second' | 'third';
+export type BreastfeedingStage = 'months_1_6' | 'months_7_12';
+
+export interface LifeStageAdjustment {
+  lifeStage: LifeStage;
+  label: string; // e.g. "Pregnancy \u2014 2nd Trimester"
+  /** kcal/day to ADD on top of an already-computed TDEE/goal figure. 0 for
+   *  'none', PCOS, perimenopause, and 1st-trimester pregnancy \u2014 in those
+   *  cases 0 is the correct, cited value, not a placeholder for "unknown". */
+  calorieAddition: number;
+  /** True only when calorieAddition comes from a specific cited guideline
+   *  (pregnancy 2nd/3rd trimester, either breastfeeding stage). */
+  hasNumericAdjustment: boolean;
+  /** Educational note for the UI. Always present for PCOS/perimenopause
+   *  (no numeric adjustment exists, so the note IS the feature); present
+   *  for 1st-trimester pregnancy to explain the 0 kcal figure; absent
+   *  otherwise. */
+  note?: string;
 }
 
 export interface SourceEntry {
@@ -332,6 +372,56 @@ const GOAL_TIERS: Array<{ goal: BMRGoal; label: string; delta: number }> = [
   { goal: 'aggressive_bulk', label: 'Aggressive Bulk', delta: 500 },
 ];
 
+// --- MACRO BREAKDOWN ---
+// Grams are derived from each goal tier's dailyCalories using the
+// NASEM/USDA Acceptable Macronutrient Distribution Range (AMDR) for
+// adults: Protein 10-35%, Carbohydrate 45-65%, Fat 20-35% of total
+// calories (Dietary Reference Intakes for Energy, Carbohydrate, Fiber,
+// Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids \u2014 National
+// Academies of Sciences, Engineering, and Medicine; see BMR_SOURCES).
+// Conversions: protein/carbs = 4 kcal/g, fat = 9 kcal/g.
+//
+// The percentages below are ONE documented choice within those official
+// ranges per goal \u2014 not a separate published standard, and no split from
+// any competitor site:
+//  - Aggressive Cut (35P/45C/20F): protein pinned to the AMDR's UPPER
+//    bound to help preserve lean mass during a larger deficit; carbs and
+//    fat pinned to their AMDR LOWER bounds since the calorie deficit
+//    itself is doing the work, not carb/fat restriction.
+//  - Mild Cut (30P/45C/25F): still elevated protein for lean-mass
+//    retention, with a bit more fat headroom than the aggressive tier.
+//  - Maintain (20P/50C/30F): a balanced split near the middle of all
+//    three AMDR ranges \u2014 no cut- or bulk-specific bias.
+//  - Mild Bulk (20P/55C/25F): moderate protein (AMDR midpoint) with carbs
+//    shifted up to help fuel training and support a surplus.
+//  - Aggressive Bulk (15P/60C/25F): protein nearer the AMDR floor is
+//    still a large gram amount at these higher absolute calories; carbs
+//    shifted toward the AMDR's upper end to fuel the bigger surplus.
+// Every value stays within its own AMDR bound and each row sums to 100%.
+const MACRO_SPLIT_BY_GOAL: Record<BMRGoal, { proteinPct: number; carbsPct: number; fatPct: number }> = {
+  aggressive_cut: { proteinPct: 35, carbsPct: 45, fatPct: 20 },
+  mild_cut: { proteinPct: 30, carbsPct: 45, fatPct: 25 },
+  maintain: { proteinPct: 20, carbsPct: 50, fatPct: 30 },
+  mild_bulk: { proteinPct: 20, carbsPct: 55, fatPct: 25 },
+  aggressive_bulk: { proteinPct: 15, carbsPct: 60, fatPct: 25 },
+};
+
+const PROTEIN_KCAL_PER_G = 4;
+const CARBS_KCAL_PER_G = 4;
+const FAT_KCAL_PER_G = 9;
+
+export const calculateMacros = (dailyCalories: number, goal: BMRGoal): MacroBreakdown => {
+  const { proteinPct, carbsPct, fatPct } = MACRO_SPLIT_BY_GOAL[goal];
+  return {
+    proteinPct,
+    carbsPct,
+    fatPct,
+    proteinGrams: (dailyCalories * (proteinPct / 100)) / PROTEIN_KCAL_PER_G,
+    carbsGrams: (dailyCalories * (carbsPct / 100)) / CARBS_KCAL_PER_G,
+    fatGrams: (dailyCalories * (fatPct / 100)) / FAT_KCAL_PER_G,
+  };
+};
+
 export const getGoalCalories = (tdee: number, gender: BMRGender): GoalCalorieEntry[] => {
   // Commonly-cited general safety floors for unsupervised calorie targets
   // (e.g. NIH/Mayo-Clinic-style guidance): ~1,500 kcal/day for men, ~1,200
@@ -353,9 +443,105 @@ export const getGoalCalories = (tdee: number, gender: BMRGender): GoalCalorieEnt
       safetyWarning: isUnsafeLow
         ? `This falls below the commonly cited ${safetyFloor.toLocaleString()} kcal/day floor for ${gender === 'male' ? 'men' : 'women'} on an unsupervised diet. Consider a less aggressive goal, or only pursue this with medical guidance.`
         : undefined,
+      macros: calculateMacros(dailyCalories, tier.goal),
     };
   });
 };
+
+// --- LIFE-STAGE ADJUSTMENT LOOKUP ---
+// Only pregnancy (2nd/3rd trimester) and breastfeeding have an official,
+// citable numeric kcal/day addition. PCOS and perimenopause do not \u2014 so
+// those resolve to 0 kcal plus an educational note, rather than an
+// invented figure. Every number here is additive on top of an
+// already-computed TDEE/goal figure; nothing here recalculates BMR/TDEE.
+
+// ACOG (American College of Obstetricians and Gynecologists) — cited
+// additional kcal/day needs by trimester.
+const PREGNANCY_ADDITION: Record<PregnancyTrimester, number> = {
+  first: 0,
+  second: 340,
+  third: 450,
+};
+
+// USDA Dietary Guidelines for Americans — cited additional kcal/day for
+// exclusive breastfeeding, by stage.
+const BREASTFEEDING_ADDITION: Record<BreastfeedingStage, number> = {
+  months_1_6: 330,
+  months_7_12: 400,
+};
+
+const TRIMESTER_LABEL: Record<PregnancyTrimester, string> = {
+  first: '1st Trimester',
+  second: '2nd Trimester',
+  third: '3rd Trimester',
+};
+
+const BREASTFEEDING_LABEL: Record<BreastfeedingStage, string> = {
+  months_1_6: 'Months 1\u20136',
+  months_7_12: 'Months 7\u201312',
+};
+
+export const getLifeStageAdjustment = (
+  lifeStage: LifeStage,
+  trimester?: PregnancyTrimester,
+  breastfeedingStage?: BreastfeedingStage
+): LifeStageAdjustment => {
+  if (lifeStage === 'pregnant') {
+    const t = trimester ?? 'first';
+    const addition = PREGNANCY_ADDITION[t];
+    return {
+      lifeStage,
+      label: `Pregnancy \u2014 ${TRIMESTER_LABEL[t]}`,
+      calorieAddition: addition,
+      hasNumericAdjustment: addition > 0,
+      note: t === 'first'
+        ? 'ACOG cites no additional calorie need during the 1st trimester \u2014 your base targets below already apply.'
+        : undefined,
+    };
+  }
+  if (lifeStage === 'breastfeeding') {
+    const s = breastfeedingStage ?? 'months_1_6';
+    return {
+      lifeStage,
+      label: `Breastfeeding \u2014 ${BREASTFEEDING_LABEL[s]}`,
+      calorieAddition: BREASTFEEDING_ADDITION[s],
+      hasNumericAdjustment: true,
+    };
+  }
+  if (lifeStage === 'pcos') {
+    return {
+      lifeStage,
+      label: 'PCOS',
+      calorieAddition: 0,
+      hasNumericAdjustment: false,
+      note: 'PCOS can affect insulin sensitivity and metabolism \u2014 there\u2019s no universal calorie adjustment for this; please consult a doctor or registered dietitian for personalized guidance.',
+    };
+  }
+  if (lifeStage === 'perimenopause') {
+    return {
+      lifeStage,
+      label: 'Perimenopause',
+      calorieAddition: 0,
+      hasNumericAdjustment: false,
+      note: 'Perimenopause can shift metabolism and body composition \u2014 there\u2019s no universal calorie adjustment for this; please consult a doctor or registered dietitian for personalized guidance.',
+    };
+  }
+  return {
+    lifeStage: 'none',
+    label: 'None',
+    calorieAddition: 0,
+    hasNumericAdjustment: false,
+  };
+};
+
+/**
+ * Adds a life-stage kcal/day addition on top of an already-computed
+ * figure (TDEE or a goal-calorie target). Purely additive \u2014 never
+ * mutates or recalculates the base figure, and returns the base figure
+ * unchanged when calorieAddition is 0.
+ */
+export const applyLifeStageAddition = (baseCalories: number, adjustment: LifeStageAdjustment): number =>
+  baseCalories + adjustment.calorieAddition;
 
 // --- SOURCES & REFERENCES ---
 // One entry per formula/standard actually implemented above.
@@ -398,5 +584,23 @@ export const BMR_SOURCES: SourceEntry[] = [
   {
     metric: 'Activity Multipliers (TDEE)',
     citation: 'A long-standing nutrition-science convention for converting BMR into total daily energy expenditure \u2014 not pinned to one single paper, the same way BMI Prime isn\u2019t attributed to a specific publication in this app\u2019s BMI calculator.',
+  },
+  {
+    metric: 'Macro Breakdown (AMDR)',
+    citation: 'National Academies of Sciences, Engineering, and Medicine \u2014 Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids. Defines the Acceptable Macronutrient Distribution Range for adults (Protein 10\u201335%, Carbohydrate 45\u201365%, Fat 20\u201335% of total calories) used to compute the gram splits above; the exact percentage chosen within each range for each goal is documented in code comments.',
+    url: 'https://www.ncbi.nlm.nih.gov/books/NBK56068/',
+    linkLabel: 'National Academies \u2014 Dietary Reference Intakes (AMDR)',
+  },
+  {
+    metric: 'Pregnancy Calorie Additions',
+    citation: 'American College of Obstetricians and Gynecologists (ACOG) \u2014 cites no additional calorie need in the 1st trimester, approximately +340 kcal/day in the 2nd trimester, and approximately +450 kcal/day in the 3rd trimester, added on top of pre-pregnancy energy needs.',
+    url: 'https://www.acog.org/womens-health/faqs/nutrition-during-pregnancy',
+    linkLabel: 'ACOG \u2014 Nutrition During Pregnancy',
+  },
+  {
+    metric: 'Breastfeeding Calorie Additions',
+    citation: 'USDA Dietary Guidelines for Americans \u2014 cites approximately +330 kcal/day for exclusive breastfeeding in months 1\u20136 postpartum and approximately +400 kcal/day in months 7\u201312, added on top of pre-pregnancy energy needs.',
+    url: 'https://www.dietaryguidelines.gov/',
+    linkLabel: 'USDA \u2014 Dietary Guidelines for Americans',
   },
 ];

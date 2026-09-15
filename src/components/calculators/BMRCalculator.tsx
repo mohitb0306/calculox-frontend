@@ -60,6 +60,27 @@ const ACTIVITY_OPTIONS: Array<{ level: ActivityLevel; label: string; description
   { level: 'extra_active', label: 'Extra Active', description: 'Professional athlete / very demanding job' },
 ];
 
+// --- LIFE STAGE DROPDOWN OPTIONS ---
+// Pregnant, Breastfeeding, PCOS, and Perimenopause are all conditions tied to
+// having ovaries — the same biological basis "Biological Sex" is used for
+// elsewhere in this calculator (e.g. selecting BMR formula coefficients).
+// When Biological Sex = Male, none of the four apply, so the dropdown is
+// restricted to "None" only. See getLifeStageOptions() below.
+const LIFE_STAGE_OPTIONS: Array<{ value: LifeStage; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'pregnant', label: 'Pregnant' },
+  { value: 'breastfeeding', label: 'Breastfeeding' },
+  { value: 'pcos', label: 'PCOS' },
+  { value: 'perimenopause', label: 'Perimenopause' },
+];
+
+const MALE_LIFE_STAGE_OPTIONS: Array<{ value: LifeStage; label: string }> = [
+  { value: 'none', label: 'None' },
+];
+
+const getLifeStageOptions = (gender: BMRGender) =>
+  gender === 'male' ? MALE_LIFE_STAGE_OPTIONS : LIFE_STAGE_OPTIONS;
+
 const GOAL_STYLES: Record<string, { icon: IconType; text: string; bgLight: string; border: string }> = {
   aggressive_cut: { icon: FiTrendingDown, text: 'text-red-600 dark:text-red-400', bgLight: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800' },
   mild_cut: { icon: FiTrendingDown, text: 'text-orange-600 dark:text-orange-400', bgLight: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800' },
@@ -227,6 +248,17 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   useEffect(() => {
     if (downloadingFormat) setDownloadMenuOpen(false);
   }, [downloadingFormat]);
+
+  // Pregnant/Breastfeeding/PCOS/Perimenopause are all restricted to "None"
+  // when Biological Sex = Male (see getLifeStageOptions). If the user had
+  // one of those selected and then switches to Male, drop back to "None"
+  // automatically so the UI can never end up in the inconsistent state of
+  // Male + a female-specific Life Stage selected.
+  useEffect(() => {
+    if (gender === 'male' && lifeStage !== 'none') {
+      setLifeStage('none');
+    }
+  }, [gender, lifeStage]);
 
   const isCalculateDisabled = useMemo(() => {
     if (!age || !weight) return true;
@@ -828,11 +860,9 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             onChange={(e) => setLifeStage(e.target.value as LifeStage)}
             className="w-full appearance-none rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white px-3.5 py-3 pr-10 shadow-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-500 cursor-pointer"
           >
-            <option value="none">None</option>
-            <option value="pregnant">Pregnant</option>
-            <option value="breastfeeding">Breastfeeding</option>
-            <option value="pcos">PCOS</option>
-            <option value="perimenopause">Perimenopause</option>
+            {getLifeStageOptions(gender).map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
           <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
         </div>

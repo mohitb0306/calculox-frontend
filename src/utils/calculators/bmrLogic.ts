@@ -59,6 +59,12 @@ export interface GoalCalorieEntry {
   dailyCalories: number;
   deltaFromMaintenance: number; // negative for cuts, positive for surplus
   expectedChangePerWeekKg: number;
+  /** True when dailyCalories falls below a commonly-cited unsupervised-diet
+   *  safety floor for the given gender. Does not alter dailyCalories itself
+   *  — purely a display flag so the UI can warn instead of recommend. */
+  isUnsafeLow?: boolean;
+  /** Human-readable warning text, present only when isUnsafeLow is true. */
+  safetyWarning?: string;
 }
 
 export interface SourceEntry {
@@ -326,14 +332,29 @@ const GOAL_TIERS: Array<{ goal: BMRGoal; label: string; delta: number }> = [
   { goal: 'aggressive_bulk', label: 'Aggressive Bulk', delta: 500 },
 ];
 
-export const getGoalCalories = (tdee: number): GoalCalorieEntry[] => {
-  return GOAL_TIERS.map((tier) => ({
-    goal: tier.goal,
-    label: tier.label,
-    dailyCalories: tdee + tier.delta,
-    deltaFromMaintenance: tier.delta,
-    expectedChangePerWeekKg: (tier.delta * 7) / KCAL_PER_KG,
-  }));
+export const getGoalCalories = (tdee: number, gender: BMRGender): GoalCalorieEntry[] => {
+  // Commonly-cited general safety floors for unsupervised calorie targets
+  // (e.g. NIH/Mayo-Clinic-style guidance): ~1,500 kcal/day for men, ~1,200
+  // kcal/day for women. This is a display-only floor for flagging unusually
+  // low results — it does not change how dailyCalories is calculated.
+  const safetyFloor = gender === 'male' ? 1500 : 1200;
+
+  return GOAL_TIERS.map((tier) => {
+    const dailyCalories = tdee + tier.delta;
+    const isUnsafeLow = dailyCalories < safetyFloor;
+
+    return {
+      goal: tier.goal,
+      label: tier.label,
+      dailyCalories,
+      deltaFromMaintenance: tier.delta,
+      expectedChangePerWeekKg: (tier.delta * 7) / KCAL_PER_KG,
+      isUnsafeLow,
+      safetyWarning: isUnsafeLow
+        ? `This falls below the commonly cited ${safetyFloor.toLocaleString()} kcal/day floor for ${gender === 'male' ? 'men' : 'women'} on an unsupervised diet. Consider a less aggressive goal, or only pursue this with medical guidance.`
+        : undefined,
+    };
+  });
 };
 
 // --- SOURCES & REFERENCES ---
@@ -370,7 +391,7 @@ export const BMR_SOURCES: SourceEntry[] = [
   },
   {
     metric: 'Schofield / WHO-FAO-UNU Equation',
-    citation: 'Schofield WN (1985), Human Nutrition: Clinical Nutrition, retained in FAO/WHO/UNU\u2019s Human Energy Requirements Technical Report Series (Table 5.2) \u2014 the weight-based, age-banded equation the WHO itself uses.',
+    citation: 'Schofield WN (1985), Human Nutrition: Clinical Nutrition. The kJ/day coefficients from that paper convert precisely to the kcal/day figures used here; the same equation was subsequently reprinted in WHO Technical Report Series 724 (1985) and again in the FAO/WHO/UNU Human Energy Requirements report (Rome, 2004), which is why some sources label these coefficients \u201crevised WHO/FAO/UNU (2004)\u201d rather than \u201cSchofield (1985)\u201d \u2014 they are the same numbers.',
     url: 'https://www.fao.org/4/y5686e/y5686e07.htm',
     linkLabel: 'FAO/WHO/UNU \u2014 Human Energy Requirements, Table 5.2',
   },

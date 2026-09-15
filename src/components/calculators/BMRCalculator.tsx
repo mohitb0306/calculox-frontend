@@ -341,7 +341,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
     const bmrResult = calculateBMR(w, h, a, gender, unit, hasBodyFatInput ? bf : null);
     const tdee = calculateTDEE(bmrResult.primaryBmr);
     const activeTdeeCalories = tdee.find((t) => t.level === activityLevel)?.calories ?? bmrResult.primaryBmr * 1.2;
-    const goals = getGoalCalories(activeTdeeCalories);
+    const goals = getGoalCalories(activeTdeeCalories, gender);
 
     setResult(bmrResult);
     setTdeeRows(tdee);
@@ -982,21 +982,34 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {goalRows.map((g) => {
                 const style = GOAL_STYLES[g.goal];
+                // Unusually low results get a red warning treatment instead
+                // of the normal goal-tier color, and a warning line replaces
+                // the usual delta/week-change text — the dailyCalories value
+                // itself is unchanged either way.
+                const cardText = g.isUnsafeLow ? 'text-red-700 dark:text-red-400' : style.text;
+                const cardBg = g.isUnsafeLow ? 'bg-red-50 dark:bg-red-900/20' : style.bgLight;
+                const cardBorder = g.isUnsafeLow ? 'border-red-300 dark:border-red-800' : style.border;
                 return (
-                  <div key={g.goal} className={`rounded-2xl border p-5 ${style.bgLight} ${style.border}`}>
+                  <div key={g.goal} className={`rounded-2xl border p-5 ${cardBg} ${cardBorder}`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <SafeIcon icon={style.icon} className={`w-4 h-4 ${style.text}`} />
-                      <h4 className={`text-sm font-bold uppercase tracking-wider ${style.text}`}>{g.label}</h4>
+                      <SafeIcon icon={g.isUnsafeLow ? FiAlertCircle : style.icon} className={`w-4 h-4 ${cardText}`} />
+                      <h4 className={`text-sm font-bold uppercase tracking-wider ${cardText}`}>{g.label}</h4>
                     </div>
                     <p className="text-2xl font-black text-neutral-900 dark:text-white tracking-tight">
                       {formatKcal(g.dailyCalories)}<span className="text-xs font-semibold text-neutral-400 ml-1">/day</span>
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
-                      {g.deltaFromMaintenance === 0 ? 'At maintenance' : `${g.deltaFromMaintenance > 0 ? '+' : ''}${g.deltaFromMaintenance} kcal/day`}
-                      {g.expectedChangePerWeekKg !== 0 && (
-                        <> · \u2248 {g.expectedChangePerWeekKg > 0 ? '+' : ''}{g.expectedChangePerWeekKg.toFixed(2)} kg/week</>
-                      )}
-                    </p>
+                    {g.isUnsafeLow ? (
+                      <p className="mt-2 text-xs font-semibold text-red-700 dark:text-red-400 leading-relaxed">
+                        {g.safetyWarning}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                        {g.deltaFromMaintenance === 0 ? 'At maintenance' : `${g.deltaFromMaintenance > 0 ? '+' : ''}${g.deltaFromMaintenance} kcal/day`}
+                        {g.expectedChangePerWeekKg !== 0 && (
+                          <> · \u2248 {g.expectedChangePerWeekKg > 0 ? '+' : ''}{g.expectedChangePerWeekKg.toFixed(2)} kg/week</>
+                        )}
+                      </p>
+                    )}
                   </div>
                 );
               })}

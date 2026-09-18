@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -6,6 +7,7 @@ import SafeIcon from "@/components/common/SafeIcon";
 import EMICalculator from "./EMICalculator";
 import BMICalculator from "./BMICalculator";
 import BMRCalculator from "./BMRCalculator";
+import BodyFatCalculator from "./BodyFatCalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
@@ -31,6 +33,11 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "bmr":
     case "bmr-calculator":
         return <BMRCalculator {...props} />;
+
+    case "bodyfat":
+    case "body-fat":
+    case "body-fat-calculator":
+        return <BodyFatCalculator {...props} />;
 
     case "sip": 
     case "sip-calculator":

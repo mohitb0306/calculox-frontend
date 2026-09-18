@@ -37,6 +37,12 @@ export interface BMRResult {
   averageBmr: number; // mean of all computed formulas
   spreadKcal: number; // max - min across computed formulas
   confidenceNote: string; // human-readable interpretation of the spread
+  /** Short (few-word) plain-language verdict for the same spread tier as
+   *  confidenceNote — meant to lead the sentence so a non-technical reader
+   *  gets the takeaway immediately, with confidenceNote as the supporting
+   *  detail right after it. Same tier thresholds as confidenceNote; this
+   *  is purely a second, shorter piece of copy for the same result. */
+  confidenceVerdict: string;
   /** Present only when body fat % was not provided but Katch-McArdle/Cunningham
    *  were still computed via the Boer LBM estimate. */
   estimatedLbmKg?: number;
@@ -155,6 +161,14 @@ export const validateBMRInput = (
   return { isValid: true };
 };
 
+// Hard-enforced bound for Body Fat % — unlike Age, an out-of-range body
+// fat is rejected outright (not just a soft warning), since it's an
+// optional input rather than one of the core required figures. Named
+// constants for the same reason as AGE_VALIDATED_MIN/MAX below: single
+// source of truth shared with the UI.
+export const BODY_FAT_MIN = 3;
+export const BODY_FAT_MAX = 60;
+
 // Same "optional, blank = not provided, 0 treated as not provided" pattern
 // as validateWaistInput in bmiLogic.ts. Body fat % is unit-independent, so
 // (unlike validateWaistInput) there is no unit parameter here.
@@ -165,11 +179,18 @@ export const validateBodyFatInput = (bodyFat: number): ValidationResult => {
   if (!Number.isFinite(bodyFat) || Number.isNaN(bodyFat) || bodyFat < 0) {
     return { isValid: false, error: 'Please enter a valid positive number for body fat percentage.' };
   }
-  if (bodyFat < 3 || bodyFat > 60) {
-    return { isValid: false, error: 'Body fat percentage must be between 3% and 60%.' };
+  if (bodyFat < BODY_FAT_MIN || bodyFat > BODY_FAT_MAX) {
+    return { isValid: false, error: `Body fat percentage must be between ${BODY_FAT_MIN}% and ${BODY_FAT_MAX}%.` };
   }
   return { isValid: true };
 };
+
+// The age range these formulas were validated against. Named constants
+// (rather than repeating 15/80 as magic numbers) so getAgeRangeWarning
+// below and the Age input's live min/max highlighting in
+// BMRCalculator.tsx can never drift out of sync with each other.
+export const AGE_VALIDATED_MIN = 15;
+export const AGE_VALIDATED_MAX = 80;
 
 /**
  * Non-blocking warning shown when age falls outside the 15-80 range these
@@ -178,8 +199,8 @@ export const validateBodyFatInput = (bodyFat: number): ValidationResult => {
  * without hiding any result.
  */
 export const getAgeRangeWarning = (age: number): string | undefined => {
-  if (age < 15 || age > 80) {
-    return 'These formulas were validated for ages 15\u201380 \u2014 results outside that range are less reliable.';
+  if (age < AGE_VALIDATED_MIN || age > AGE_VALIDATED_MAX) {
+    return `These formulas were validated for ages ${AGE_VALIDATED_MIN}\u2013${AGE_VALIDATED_MAX} \u2014 results outside that range are less reliable.`;
   }
   return undefined;
 };
@@ -302,6 +323,7 @@ export const calculateBMR = (
   const spreadKcal = bmrValues.length > 0 ? Math.max(...bmrValues) - Math.min(...bmrValues) : 0;
 
   const confidenceNote = getBMRInsight(spreadKcal, hasRealBodyFat);
+  const confidenceVerdict = getBMRConfidenceVerdict(spreadKcal, hasRealBodyFat);
 
   return {
     results,
@@ -309,6 +331,7 @@ export const calculateBMR = (
     averageBmr,
     spreadKcal,
     confidenceNote,
+    confidenceVerdict,
     estimatedLbmKg: !hasRealBodyFat && lbmIsUsable ? estimatedLbmKg : undefined,
     ageRangeWarning: getAgeRangeWarning(age),
   };
@@ -324,14 +347,33 @@ export const calculateBMR = (
  */
 export const getBMRInsight = (spreadKcal: number, hasRealBodyFat: boolean): string => {
   if (spreadKcal < 75) {
-    return 'High confidence \u2014 all formulas agree closely, so any of the values above is a reasonable estimate.';
+    return 'All formulas agree closely, so any of the values above is a reasonable estimate.';
   }
   if (spreadKcal <= 150) {
-    return 'This is a normal spread. Weight/height-only formulas (Mifflin-St Jeor, Harris-Benedict, Schofield) and body-composition formulas (Katch-McArdle, Cunningham) naturally diverge more for people who are very lean or carry a higher body fat percentage.';
+    return 'Weight- and height-based formulas (Mifflin-St Jeor, Harris-Benedict, Schofield) naturally diverge from body-composition formulas (Katch-McArdle, Cunningham) for people who are very lean or carry a higher body fat percentage \u2014 this is expected, not a sign of error.';
   }
   return hasRealBodyFat
-    ? 'This spread is wider than usual. Since you entered your actual body fat percentage, the Katch-McArdle and Cunningham results are likely the most reliable estimates here.'
-    : 'This spread is wider than usual. Entering your actual body fat percentage (instead of an estimated one) would let Katch-McArdle and Cunningham give a more reliable result.';
+    ? 'A wider-than-usual spread is common for people with more muscle or body fat than average. Since a measured body fat percentage was entered, Katch-McArdle and Cunningham can use it directly, making them the more reliable estimates here.'
+    : 'This spread is wider than usual. Entering an actual body fat percentage, rather than an estimated one, would let Katch-McArdle and Cunningham produce a more reliable result.';
+};
+
+/**
+ * Short, plain-language verdict for the same spread tier as getBMRInsight
+ * above — a few words meant to be read first (bolded), with the fuller
+ * getBMRInsight sentence following as supporting detail. Same thresholds,
+ * same branching \u2014 this is only a second, shorter piece of copy for the
+ * same computed result, not a new calculation.
+ */
+export const getBMRConfidenceVerdict = (spreadKcal: number, hasRealBodyFat: boolean): string => {
+  if (spreadKcal < 75) {
+    return 'This estimate is highly reliable.';
+  }
+  if (spreadKcal <= 150) {
+    return 'This is within the expected range.';
+  }
+  return hasRealBodyFat
+    ? 'Prioritize the body-composition formulas.'
+    : 'Add your body fat percentage for a more precise estimate.';
 };
 
 // --- TDEE ---
@@ -446,6 +488,54 @@ export const getGoalCalories = (tdee: number, gender: BMRGender): GoalCalorieEnt
       macros: calculateMacros(dailyCalories, tier.goal),
     };
   });
+};
+
+// --- TDEE COMPOSITION BREAKDOWN (display-only) ---
+// Decomposes an already-computed total calories figure (TDEE, optionally
+// with a life-stage addition applied) into three commonly-cited components
+// for display purposes: BMR, Activity, and TEF (Thermic Effect of Food).
+// This does NOT change how BMR/TDEE/goal calories are calculated anywhere
+// else in this module \u2014 it is a pure decomposition of a number that was
+// already computed, for a "Daily Target" breakdown visual.
+//
+// TEF is estimated as ~10% of total daily energy expenditure \u2014 see
+// TEF_PERCENT_OF_TOTAL and the citation in BMR_SOURCES below. This is the
+// standard nutrition-science approximation; the activity-level multipliers
+// used elsewhere in this file already implicitly include TEF (that's the
+// normal convention for those multipliers), so this breakdown re-splits the
+// existing total into three parts for DISPLAY rather than adding new
+// calories on top of it \u2014 BMR + Activity + TEF always sums back to the
+// same total that was passed in.
+const TEF_PERCENT_OF_TOTAL = 0.10;
+
+export interface TDEEBreakdown {
+  totalCalories: number;
+  bmrCalories: number;
+  activityCalories: number;
+  tefCalories: number;
+  bmrPct: number;
+  activityPct: number;
+  tefPct: number;
+}
+
+export const getTDEEBreakdown = (totalCalories: number, primaryBmr: number): TDEEBreakdown => {
+  const bmrCalories = Math.round(primaryBmr);
+  const tefCalories = Math.round(totalCalories * TEF_PERCENT_OF_TOTAL);
+  // Guarded against going negative in case of an unusual combination of
+  // inputs (e.g. a very low activity multiplier) \u2014 in every realistic case
+  // (multipliers start at 1.2x) this remains comfortably positive.
+  const activityCalories = Math.max(0, Math.round(totalCalories) - bmrCalories - tefCalories);
+  const total = bmrCalories + activityCalories + tefCalories;
+
+  return {
+    totalCalories: total,
+    bmrCalories,
+    activityCalories,
+    tefCalories,
+    bmrPct: total > 0 ? Math.round((bmrCalories / total) * 100) : 0,
+    activityPct: total > 0 ? Math.round((activityCalories / total) * 100) : 0,
+    tefPct: total > 0 ? Math.round((tefCalories / total) * 100) : 0,
+  };
 };
 
 // --- LIFE-STAGE ADJUSTMENT LOOKUP ---
@@ -602,5 +692,11 @@ export const BMR_SOURCES: SourceEntry[] = [
     citation: 'USDA Dietary Guidelines for Americans \u2014 cites approximately +330 kcal/day for exclusive breastfeeding in months 1\u20136 postpartum and approximately +400 kcal/day in months 7\u201312, added on top of pre-pregnancy energy needs.',
     url: 'https://www.dietaryguidelines.gov/',
     linkLabel: 'USDA \u2014 Dietary Guidelines for Americans',
+  },
+  {
+    metric: 'Thermic Effect of Food (TEF) \u2014 Daily Target Breakdown',
+    citation: 'A narrative review of diet-induced-thermogenesis research estimates basal metabolism at roughly 60% of total daily energy expenditure and the thermic effect of food at approximately 10%, with the remainder attributable to physical activity \u2014 the same three-way split used to break your daily target down into BMR / Activity / TEF above.',
+    url: 'https://www.sciencedirect.com/science/article/pii/S2589936824000239',
+    linkLabel: 'Diet-Induced Thermogenesis \u2014 Narrative Review (2024)',
   },
 ];

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from "react";
@@ -8,6 +7,7 @@ import EMICalculator from "./EMICalculator";
 import BMICalculator from "./BMICalculator";
 import BMRCalculator from "./BMRCalculator";
 import BodyFatCalculator from "./BodyFatCalculator";
+import WHRCalculator from "./WHRCalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
@@ -38,6 +38,13 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "body-fat":
     case "body-fat-calculator":
         return <BodyFatCalculator {...props} />;
+
+    case "whr":
+    case "whr-calculator":
+    case "waist-to-hip":
+    case "waist-to-hip-ratio":
+    case "waist-to-hip-ratio-calculator":
+        return <WHRCalculator {...props} />;
 
     case "sip": 
     case "sip-calculator":

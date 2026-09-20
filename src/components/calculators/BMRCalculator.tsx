@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import SafeIcon from '@/components/common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
@@ -1340,7 +1341,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
               </div>
 
               <div className="sm:col-span-2 lg:col-span-1">
-                <div className="flex items-center gap-1.5 mb-2.5 min-h-[38px]">
+                <div className="flex flex-wrap items-center gap-1.5 mb-2.5 min-h-[38px]">
                   <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
                     Body Fat<span className="align-super text-xs ml-0.5">*</span>
                   </span>
@@ -1349,6 +1350,28 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                     align="end"
                     text="Improves accuracy for Katch-McArdle and Cunningham. Left blank, we'll estimate it from your height and weight instead."
                   />
+                  <motion.span
+                    className="inline-block rounded-full"
+                    animate={prefersReducedMotion ? undefined : {
+                      boxShadow: [
+                        '0 0 0 0 rgba(99,102,241,0.35)',
+                        '0 0 0 5px rgba(99,102,241,0)',
+                        '0 0 0 0 rgba(99,102,241,0)',
+                      ],
+                    }}
+                    transition={prefersReducedMotion ? undefined : { duration: 1.6, repeat: Infinity, repeatDelay: 0.9, ease: 'easeOut' }}
+                  >
+                    <Link
+                      href="/calculators/body-fat-calculator"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Find your body fat percentage — opens in a new tab"
+                      className="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-500/15 text-xs font-bold text-indigo-600 dark:text-indigo-300 shadow-sm hover:bg-indigo-100 dark:hover:bg-indigo-500/25 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors cursor-pointer"
+                    >
+                      <SafeIcon icon={FiBarChart2} className="w-3 h-3" />
+                      Find yours
+                    </Link>
+                  </motion.span>
                 </div>
                 <NumberField
                   value={bodyFat}

@@ -38,7 +38,7 @@ const {
   FiAlertCircle, FiInfo, FiZap, FiArrowDown, FiImage, FiFileText, FiLoader,
   FiRotateCcw, FiCheckCircle, FiExternalLink, FiTrendingUp, FiTrendingDown,
   FiMinus, FiShield, FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown,
-  FiDownload, FiBarChart2, FiActivity, FiUser, FiWind, FiAward,
+  FiDownload, FiBarChart2, FiActivity, FiUser, FiWind, FiAward, FiSliders,
 } = FiIcons;
 
 interface BMRCalculatorProps {
@@ -378,8 +378,6 @@ const InfoTip: React.FC<{ text: string; widthClass?: string; align?: 'center' | 
 
 const noSpinnerClass = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
-const formatKcal = (n: number): string => `${Math.round(n).toLocaleString()} kcal`;
-
 // --- SEGMENTED TOGGLE --- shared pill-switch used for Unit, Biological Sex,
 // Trimester, and Breastfeeding Stage. Previously each of these was its own
 // hand-rolled block with a static class-swap for the active state — visually
@@ -544,15 +542,10 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   const prefersReducedMotion = useReducedMotion();
 
   // --- State ---
-  // Height and Weight each have their OWN unit toggle — they used to share
-  // one `unit` state (toggling either flipped both), now each is fully
-  // independent, e.g. Height in ft/in while Weight is in kg. bmrLogic's
-  // calculateBMR/validateBMRInput still only take a single unit for the
-  // whole person, so at calculate time both measurements are normalized to
-  // metric locally (see handleCalculate) before being passed in — the
-  // independence lives entirely in this component, not in bmrLogic.ts.
-  const [heightUnit, setHeightUnit] = useState<BMRUnit>('imperial');
-  const [weightUnit, setWeightUnit] = useState<BMRUnit>('imperial');
+  const [unit, setUnit] = useState<BMRUnit>('imperial');
+  const heightUnit = unit;
+  const weightUnit = unit;
+  
   const [age, setAge] = useState<number | string>('');
   const [gender, setGender] = useState<BMRGender>('male');
 
@@ -599,6 +592,28 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
 
   const actionButtonsRef = useRef<HTMLDivElement | null>(null);
+
+  // --- CANONICAL (PRECISE, METRIC) SOURCE OF TRUTH ---
+  const heightCmRef = useRef<number | null>(null);
+  const weightKgRef = useRef<number | null>(null);
+
+  const syncHeightCanonicalMetric = (v: string) => {
+    const n = parseFloat(v);
+    heightCmRef.current = Number.isNaN(n) ? null : n;
+  };
+  
+  const syncHeightCanonicalImperial = (ftStr: string, inStr: string) => {
+    const ft = parseFloat(ftStr);
+    const inc = parseFloat(inStr);
+    if (Number.isNaN(ft) && Number.isNaN(inc)) { heightCmRef.current = null; return; }
+    const totalInches = (Number.isNaN(ft) ? 0 : ft) * 12 + (Number.isNaN(inc) ? 0 : inc);
+    heightCmRef.current = totalInches * 2.54;
+  };
+  
+  const syncWeightCanonical = (v: string) => {
+    const n = parseFloat(v);
+    weightKgRef.current = Number.isNaN(n) ? null : (weightUnit === 'metric' ? n : n / 2.20462);
+  };
 
   useEffect(() => {
     if (!downloadMenuOpen) return;
@@ -704,59 +719,39 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
     setHeightIn('');
     setBodyFat('');
     setActivityLevel('moderate');
-    setHeightUnit('imperial');
-    setWeightUnit('imperial');
+    setUnit('imperial');
     setCalculationMode('auto');
     setLifeStage('none');
     setTrimester('first');
     setBreastfeedingStage('months_1_6');
+    heightCmRef.current = null;
+    weightKgRef.current = null;
     resetCalculation();
   };
 
-  // Converts the currently-entered height into the newly-selected unit so
-  // switching ft/in ↔ cm doesn't blank the field. Fully independent of
-  // Weight's own toggle below.
-  const handleHeightUnitToggle = (newUnit: BMRUnit) => {
-    if (newUnit === heightUnit) return;
+  const handleUnitToggle = (newUnit: BMRUnit) => {
+    if (newUnit === unit) return;
     resetCalculation();
 
-    if (newUnit === 'imperial') {
-      const h = parseFloat(height.toString());
-      if (!Number.isNaN(h)) {
-        const totalInches = h / 2.54;
+    // Height
+    if (heightCmRef.current !== null) {
+      if (newUnit === 'imperial') {
+        const totalInches = heightCmRef.current / 2.54;
         let ft = Math.floor(totalInches / 12);
         let inch = Math.round(totalInches % 12);
-        if (inch === 12) {
-          inch = 0;
-          ft += 1;
-        }
-        setHeightFt(ft);
-        setHeightIn(inch);
-      }
-    } else {
-      const ft = parseFloat(heightFt.toString());
-      const inc = parseFloat(heightIn.toString());
-      if (!Number.isNaN(ft) && !Number.isNaN(inc)) {
-        const totalInches = (ft * 12) + inc;
-        setHeight(Math.round(totalInches * 2.54));
+        if (inch === 12) { inch = 0; ft += 1; }
+        setHeightFt(ft); setHeightIn(inch);
+      } else {
+        setHeight(Math.round(heightCmRef.current));
       }
     }
 
-    setHeightUnit(newUnit);
-  };
-
-  // Converts the currently-entered weight into the newly-selected unit,
-  // independently of Height's toggle above.
-  const handleWeightUnitToggle = (newUnit: BMRUnit) => {
-    if (newUnit === weightUnit) return;
-    resetCalculation();
-
-    const w = parseFloat(weight.toString());
-    if (!Number.isNaN(w)) {
-      setWeight(newUnit === 'imperial' ? Math.round(w * 2.20462) : Math.round(w / 2.20462));
+    // Weight
+    if (weightKgRef.current !== null) {
+      setWeight(newUnit === 'imperial' ? Math.round(weightKgRef.current * 2.20462) : Math.round(weightKgRef.current));
     }
 
-    setWeightUnit(newUnit);
+    setUnit(newUnit);
   };
 
   const handleCalculate = () => {
@@ -766,10 +761,8 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
     const h = activeHeight; // cm if heightUnit is metric, else total inches
     const a = parseInt(age.toString(), 10);
 
-    // Height and Weight can now be in different unit systems, but
-    // calculateBMR/validateBMRInput only take ONE unit for the whole
-    // person — so normalize both to metric ourselves first, then always
-    // call those with unit='metric' and these already-converted values.
+    // Normalize both to metric ourselves first, then always
+    // call calculateBMR/validateBMRInput with unit='metric'
     const weightKg = weightUnit === 'metric' ? w : w / 2.20462;
     const heightCm = heightUnit === 'metric' ? h : h * 2.54;
 
@@ -777,9 +770,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
 
     const validation = validateBMRInput(weightKg, heightCm, a, 'metric');
     if (!validation.isValid) {
-      // Re-derive per-field errors using each field's OWN unit/limits, so
-      // e.g. a Height error still reads in cm when Height is in cm even
-      // if Weight happens to be in lbs (and vice versa).
+      // Re-derive per-field errors using each field's OWN unit/limits
       const weightLimits = weightUnit === 'metric' ? { min: 1, max: 500, label: 'kg' } : { min: 2, max: 1100, label: 'lbs' };
       const heightLimits = heightUnit === 'metric' ? { min: 30, max: 300, label: 'cm' } : { min: 12, max: 118, label: 'inches' };
 
@@ -1137,43 +1128,31 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
       {/* eslint-disable-next-line react/no-danger */}
       <style dangerouslySetInnerHTML={{ __html: bmrSelectOptionThemeCSS }} />
 
-      {/* INPUT CARD — everything from Personal details through Life Stage
-          lives in one bordered/shadowed surface (matching the results
-          cards below it) instead of a bare, hr-divided form. Every row
-          inside shares the card's own padding as its width reference,
-          rather than each row re-declaring its own max-w-* wrapper
-          (max-w-md / max-w-4xl / max-w-2xl, previously three different
-          widths in one form). One width, set once, fixes every row at
-          once.
-
-          There is no global "Measurement Unit" control here at all —
-          per the client's request, unit selection now lives directly on
-          the two fields it actually affects (Height, Weight) as a small
-          toggle inline in each field's own label row, matching the
-          reference competitor layout. Age and Body Fat have no unit
-          toggle since neither has an alternate unit (same reason the
-          competitor reference doesn't show one on those fields either).
-          Height's toggle and Weight's toggle are two fully independent
-          controls — each has its own `heightUnit`/`weightUnit` state and
-          its own handler (handleHeightUnitToggle / handleWeightUnitToggle),
-          so switching one no longer touches the other (e.g. Height can
-          stay in ft/in while Weight is switched to kg). bmrLogic's
-          calculation functions still only take one shared unit for the
-          whole person (see toMetric in bmrLogic.ts), so at calculate time
-          (see handleCalculate) both measurements are normalized to metric
-          locally first, and calculateBMR/validateBMRInput are always
-          called with unit='metric' — the independence is handled entirely
-          here, never passed down as mismatched units. */}
-      {/* Note: this card intentionally doesn't need overflow-hidden either
-          way any more. InfoTip (see above) now renders its popover through
-          a portal into document.body with viewport-clamped fixed
-          positioning, so it's immune to any ancestor's overflow setting —
-          including the Age/Biological Sex row's popovers, which used to be
-          the first row under "Personal details" with almost no vertical
-          room above them and got clipped as a result. */}
+      {/* INPUT CARD — unified bordered/shadowed surface matching BodyFatCalculator/BMICalculator */}
       <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
-
         <div className="p-5 sm:p-6 md:p-8 space-y-8">
+
+          {/* Title + master unit toggle */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-extrabold text-neutral-900 dark:text-white tracking-tight">Input Fields</h3>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                <SafeIcon icon={FiSliders} className="w-3 h-3" />
+                Units
+              </span>
+              <SegmentedToggle
+                groupId="bmr-unit-system"
+                size="sm"
+                ariaLabel="Unit system"
+                value={unit}
+                onChange={(v) => handleUnitToggle(v as BMRUnit)}
+                options={[
+                  { value: 'imperial', label: 'Imperial' },
+                  { value: 'metric', label: 'Metric' },
+                ]}
+              />
+            </div>
+          </div>
 
           {/* Personal details — Age + Biological Sex */}
           <div>
@@ -1224,37 +1203,30 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             </div>
           </div>
 
-          {/* Calculation Mode — Auto (default) runs every formula below and
-              powers the Confidence & Insight / Compare Formulas sections;
-              pinning it to one formula shows only that formula's result
-              and hides those two sections, since there's nothing to
-              compare with a single formula. Placed above Height/Weight per
-              the design (it governs how those inputs get used, so it
-              reads first). Uses the exact same selectShellClass /
-              FiChevronDown / bmr-native-select pattern as Activity Level
-              and Life Stage below so it can't reintroduce the dark-mode
-              popup flicker those two were fixed for. */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                Calculation Mode
-              </span>
-              <InfoTip
-                widthClass="w-56"
-                text="Auto compares every formula for a reliable estimate. Pin to one if you want just that formula's result."
-              />
-            </div>
-            <div className="relative">
-              <select
-                value={calculationMode}
-                onChange={(e) => { setCalculationMode(e.target.value as CalculationMode); resetCalculation(); }}
-                className={selectShellClass}
-              >
-                {CALCULATION_MODE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          {/* Calculation Mode */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                  Calculation Mode
+                </span>
+                <InfoTip
+                  widthClass="w-56"
+                  text="Auto compares every formula for a reliable estimate. Pin to one if you want just that formula's result."
+                />
+              </div>
+              <div className="relative">
+                <select
+                  value={calculationMode}
+                  onChange={(e) => { setCalculationMode(e.target.value as CalculationMode); resetCalculation(); }}
+                  className={selectShellClass}
+                >
+                  {CALCULATION_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              </div>
             </div>
           </div>
 
@@ -1263,26 +1235,16 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mb-4">Body measurements</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2.5 min-h-[38px]">
-                  <label className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                <div className="flex items-center gap-1.5 mb-2.5 min-h-[38px]">
+                  <label htmlFor="bmr-height-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
                     Height
                   </label>
-                  <SegmentedToggle
-                    groupId="bmr-unit-height"
-                    size="sm"
-                    ariaLabel="Height unit"
-                    value={heightUnit}
-                    onChange={handleHeightUnitToggle}
-                    options={[
-                      { value: 'imperial', label: 'ft' },
-                      { value: 'metric', label: 'cm' },
-                    ]}
-                  />
                 </div>
                 {heightUnit === 'metric' ? (
                   <NumberField
+                    id="bmr-height-input"
                     value={height}
-                    onChange={(v) => { setHeight(v); resetCalculation(); }}
+                    onChange={(v) => { setHeight(v); syncHeightCanonicalMetric(v); resetCalculation(); }}
                     suffix="cm"
                     error={!!heightError}
                     min="30" max="300"
@@ -1291,16 +1253,19 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                 ) : (
                   <div className="grid grid-cols-2 gap-2.5">
                     <NumberField
+                      id="bmr-height-input"
+                      ariaLabel="Height, feet"
                       value={heightFt}
-                      onChange={(v) => { setHeightFt(v); resetCalculation(); }}
+                      onChange={(v) => { setHeightFt(v); syncHeightCanonicalImperial(v, heightIn.toString()); resetCalculation(); }}
                       suffix="ft"
                       error={!!heightError}
                       min="1" max="9"
                       placeholder="1-9"
                     />
                     <NumberField
+                      ariaLabel="Height, inches"
                       value={heightIn}
-                      onChange={(v) => { setHeightIn(v); resetCalculation(); }}
+                      onChange={(v) => { setHeightIn(v); syncHeightCanonicalImperial(heightFt.toString(), v); resetCalculation(); }}
                       suffix="in"
                       error={!!heightError}
                       min="0" max="11"
@@ -1312,25 +1277,15 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2.5 min-h-[38px]">
-                  <label className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                <div className="flex items-center gap-1.5 mb-2.5 min-h-[38px]">
+                  <label htmlFor="bmr-weight-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
                     Weight
                   </label>
-                  <SegmentedToggle
-                    groupId="bmr-unit-weight"
-                    size="sm"
-                    ariaLabel="Weight unit"
-                    value={weightUnit}
-                    onChange={handleWeightUnitToggle}
-                    options={[
-                      { value: 'imperial', label: 'lbs' },
-                      { value: 'metric', label: 'kg' },
-                    ]}
-                  />
                 </div>
                 <NumberField
+                  id="bmr-weight-input"
                   value={weight}
-                  onChange={(v) => { setWeight(v); resetCalculation(); }}
+                  onChange={(v) => { setWeight(v); syncWeightCanonical(v); resetCalculation(); }}
                   suffix={weightUnit === 'metric' ? 'kg' : 'lbs'}
                   error={!!weightError}
                   min={weightUnit === 'metric' ? '1' : '2'}
@@ -1389,103 +1344,101 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
           </div>
 
           {/* Activity Level — drives the TDEE table and goal targets */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-2.5">
-              <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                Activity Level
-              </span>
-              <InfoTip widthClass="w-60" text="How much you move day-to-day, outside of resting. This scales your BMR up into a full daily calorie estimate (TDEE)." />
-            </div>
-            <div className="relative">
-              <select
-                value={activityLevel}
-                onChange={(e) => { setActivityLevel(e.target.value as ActivityLevel); resetCalculation(); }}
-                className={selectShellClass}
-              >
-                {ACTIVITY_OPTIONS.map((opt) => (
-                  <option key={opt.level} value={opt.level}>
-                    {opt.label} — {opt.description}
-                  </option>
-                ))}
-              </select>
-              <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-            </div>
-          </div>
-
-          {/* Life Stage — female-only (Pregnant/Breastfeeding/PCOS/
-              Perimenopause all require having ovaries), so the whole block
-              is hidden outright when Biological Sex = Male, rather than
-              just restricting the dropdown's options. Set apart in its own
-              soft panel (rather than just another row) since it's an
-              optional, conditional block layered on top of the required
-              fields above it. */}
-          {gender === 'female' && (
-            <div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-neutral-50/70 dark:bg-neutral-900/30 p-5 sm:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="sm:col-span-2">
               <div className="flex items-center gap-1.5 mb-2.5">
                 <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                  Life Stage<span className="align-super text-xs ml-0.5">*</span>
+                  Activity Level
                 </span>
-                <InfoTip
-                  widthClass="w-64"
-                  text="Pregnancy and breastfeeding have official calorie additions (ACOG/USDA) shown on top of your goal targets below. PCOS and perimenopause show an educational note only — there's no universal calorie adjustment for either."
-                />
+                <InfoTip widthClass="w-60" text="How much you move day-to-day, outside of resting. This scales your BMR up into a full daily calorie estimate (TDEE)." />
               </div>
               <div className="relative">
                 <select
-                  value={lifeStage}
-                  onChange={(e) => setLifeStage(e.target.value as LifeStage)}
+                  value={activityLevel}
+                  onChange={(e) => { setActivityLevel(e.target.value as ActivityLevel); resetCalculation(); }}
                   className={selectShellClass}
                 >
-                  {LIFE_STAGE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  {ACTIVITY_OPTIONS.map((opt) => (
+                    <option key={opt.level} value={opt.level}>
+                      {opt.label} — {opt.description}
+                    </option>
                   ))}
                 </select>
                 <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               </div>
+            </div>
+          </div>
 
-              {lifeStage === 'pregnant' && (
-                <div className="mt-3">
-                  <SegmentedToggle
-                    groupId="bmr-trimester"
-                    ariaLabel="Trimester selection"
-                    value={trimester}
-                    onChange={setTrimester}
-                    options={[
-                      { value: 'first', label: '1st Trimester' },
-                      { value: 'second', label: '2nd Trimester' },
-                      { value: 'third', label: '3rd Trimester' },
-                    ]}
+          {/* Life Stage */}
+          {gender === 'female' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="sm:col-span-2 rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-neutral-50/70 dark:bg-neutral-900/30 p-5 sm:p-6">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                    Life Stage<span className="align-super text-xs ml-0.5">*</span>
+                  </span>
+                  <InfoTip
+                    widthClass="w-64"
+                    text="Pregnancy and breastfeeding have official calorie additions (ACOG/USDA) shown on top of your goal targets below. PCOS and perimenopause show an educational note only — there's no universal calorie adjustment for either."
                   />
                 </div>
-              )}
-
-              {lifeStage === 'breastfeeding' && (
-                <div className="mt-3">
-                  <SegmentedToggle
-                    groupId="bmr-breastfeeding"
-                    ariaLabel="Breastfeeding stage selection"
-                    value={breastfeedingStage}
-                    onChange={setBreastfeedingStage}
-                    options={[
-                      { value: 'months_1_6', label: 'Months 1–6' },
-                      { value: 'months_7_12', label: 'Months 7–12' },
-                    ]}
-                  />
+                <div className="relative">
+                  <select
+                    value={lifeStage}
+                    onChange={(e) => setLifeStage(e.target.value as LifeStage)}
+                    className={selectShellClass}
+                  >
+                    {LIFE_STAGE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <SafeIcon icon={FiChevronDown} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                 </div>
-              )}
 
-              {lifeStage === 'pregnant' && trimester === 'first' && lifeStageAdjustment.note && (
-                <p className="mt-2.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  {lifeStageAdjustment.note}
-                </p>
-              )}
+                {lifeStage === 'pregnant' && (
+                  <div className="mt-3">
+                    <SegmentedToggle
+                      groupId="bmr-trimester"
+                      ariaLabel="Trimester selection"
+                      value={trimester}
+                      onChange={setTrimester}
+                      options={[
+                        { value: 'first', label: '1st Trimester' },
+                        { value: 'second', label: '2nd Trimester' },
+                        { value: 'third', label: '3rd Trimester' },
+                      ]}
+                    />
+                  </div>
+                )}
 
-              {(lifeStage === 'pcos' || lifeStage === 'perimenopause') && lifeStageAdjustment.note && (
-                <div className="mt-3 flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
-                  <SafeIcon icon={FiInfo} className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium leading-relaxed">{lifeStageAdjustment.note}</p>
-                </div>
-              )}
+                {lifeStage === 'breastfeeding' && (
+                  <div className="mt-3">
+                    <SegmentedToggle
+                      groupId="bmr-breastfeeding"
+                      ariaLabel="Breastfeeding stage selection"
+                      value={breastfeedingStage}
+                      onChange={setBreastfeedingStage}
+                      options={[
+                        { value: 'months_1_6', label: 'Months 1–6' },
+                        { value: 'months_7_12', label: 'Months 7–12' },
+                      ]}
+                    />
+                  </div>
+                )}
+
+                {lifeStage === 'pregnant' && trimester === 'first' && lifeStageAdjustment.note && (
+                  <p className="mt-2.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                    {lifeStageAdjustment.note}
+                  </p>
+                )}
+
+                {(lifeStage === 'pcos' || lifeStage === 'perimenopause') && lifeStageAdjustment.note && (
+                  <div className="mt-3 flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
+                    <SafeIcon icon={FiInfo} className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm font-medium leading-relaxed">{lifeStageAdjustment.note}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

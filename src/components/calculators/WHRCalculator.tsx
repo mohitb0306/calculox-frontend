@@ -39,7 +39,7 @@ import type { ShareableReport } from '@/lib/reports/types';
 const {
   FiInfo, FiAlertCircle, FiAlertTriangle, FiCheckCircle, FiRotateCcw, FiChevronDown,
   FiDownload, FiImage, FiFileText, FiLoader, FiShare2, FiMail, FiCopy, FiCheck,
-  FiArrowDown, FiExternalLink, FiActivity, FiLayers, FiTrendingDown, FiHeart, FiX, FiMaximize2,
+  FiArrowDown, FiExternalLink, FiActivity, FiLayers, FiTrendingDown, FiHeart, FiX, FiMaximize2, FiSliders,
 } = FiIcons;
 
 interface WHRCalculatorProps {
@@ -68,6 +68,13 @@ const getStatusColors = (status: WHRStatus | 'neutral') => {
 };
 
 const noSpinnerClass = "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
+// Every field label in the input card uses these two classes so the form
+// stays visually uniform (same weight, colour and spacing above each control).
+// Section headings (h4) are intentionally bolder/greyer so the two levels
+// read as distinct.
+const fieldLabelClass = "text-sm font-medium text-neutral-700 dark:text-neutral-300";
+const fieldLabelRowClass = "flex items-center gap-1.5 mb-2";
 
 // Native <select> theming — identical approach to BMICalculator's region dropdown.
 const whrSelectOptionThemeCSS = `
@@ -328,24 +335,35 @@ interface WHRSnapshot {
 const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null, onShare, onEmailShare, onCopyLink, linkCopied = false }) => {
   const prefersReducedMotion = useReducedMotion();
 
-  // About you
+  // Personal details
   const [gender, setGender] = useState<WHRGender>('male');
   const [age, setAge] = useState<number | string>('');
   const [reference, setReference] = useState<WHRReference>('global');
   const [isPregnant, setIsPregnant] = useState<boolean>(false);
 
-  // Measurements (waist + hip share one unit, as in the mockup)
+  // Unit system — ONE master toggle sets `unit`, `heightUnit` and `weightUnit` together.
+  // They stay three separate values because the snapshot, results and report read them individually.
   const [unit, setUnit] = useState<WHRCircumferenceUnit>('cm');
   const [waist, setWaist] = useState<number | string>('');
   const [hip, setHip] = useState<number | string>('');
 
-  // Optional height / weight
+  // Height / weight (optional)
   const [height, setHeight] = useState<number | string>('');
   const [heightFt, setHeightFt] = useState<number | string>('');
   const [heightIn, setHeightIn] = useState<number | string>('');
   const [heightUnit, setHeightUnit] = useState<WHRMeasurementUnit>('metric');
   const [weight, setWeight] = useState<number | string>('');
   const [weightUnit, setWeightUnit] = useState<WHRMeasurementUnit>('metric');
+
+  // --- CANONICAL (PRECISE, METRIC) SOURCE OF TRUTH ---
+  // The fields above are rounded for display when the unit system is toggled, but that
+  // rounding must never feed back into another conversion, or repeated toggling drifts the
+  // value. So the true measurement is kept here in metric, updated only from what the person
+  // actually types, and the unit toggle re-derives every display value from these refs.
+  const waistCmRef = useRef<number | null>(null);
+  const hipCmRef = useRef<number | null>(null);
+  const heightCmRef = useRef<number | null>(null);
+  const weightKgRef = useRef<number | null>(null);
 
   // Assumed tape error — re-reads the result live, no need to press Calculate again
   const [tapeErrorCm, setTapeErrorCm] = useState<number>(DEFAULT_TAPE_ERROR_CM);
@@ -419,52 +437,67 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
     setWaist(''); setHip('');
     setHeight(''); setHeightFt(''); setHeightIn(''); setWeight('');
     setHeightUnit('metric'); setWeightUnit('metric');
+    waistCmRef.current = null; hipCmRef.current = null;
+    heightCmRef.current = null; weightKgRef.current = null;
     setTapeErrorCm(DEFAULT_TAPE_ERROR_CM);
     resetCalculation();
   };
 
-  // Converting waist/hip on a unit switch mirrors the mockup's behaviour.
-  const handleCircumferenceUnitToggle = (newUnit: WHRCircumferenceUnit) => {
-    if (newUnit === unit) return;
-    resetCalculation();
-    const convert = (v: number | string) => {
-      const n = parseFloat(v.toString());
-      if (Number.isNaN(n) || n <= 0) return '';
-      return Math.round(newUnit === 'in' ? n / 2.54 : n * 2.54);
-    };
-    setWaist(convert(waist));
-    setHip(convert(hip));
-    setUnit(newUnit);
+  // Keep the canonical metric refs in sync with whatever the person actually types,
+  // converting once from the *current* unit — never from an already-rounded value.
+  // A blank or non-positive entry clears the ref.
+  const toRef = (n: number, toCmFactor: number) => (Number.isNaN(n) || n <= 0 ? null : n * toCmFactor);
+  const syncCircumferenceCanonical = (ref: React.MutableRefObject<number | null>, v: string) => {
+    ref.current = toRef(parseFloat(v), unit === 'cm' ? 1 : 2.54);
+  };
+  const syncHeightCanonicalMetric = (v: string) => {
+    heightCmRef.current = toRef(parseFloat(v), 1);
+  };
+  const syncHeightCanonicalImperial = (ftStr: string, inStr: string) => {
+    const ft = parseFloat(ftStr);
+    const inc = parseFloat(inStr);
+    if (Number.isNaN(ft) && Number.isNaN(inc)) { heightCmRef.current = null; return; }
+    heightCmRef.current = toRef((Number.isNaN(ft) ? 0 : ft) * 12 + (Number.isNaN(inc) ? 0 : inc), 2.54);
+  };
+  const syncWeightCanonical = (v: string) => {
+    const n = parseFloat(v);
+    weightKgRef.current = Number.isNaN(n) || n <= 0 ? null : (weightUnit === 'metric' ? n : n / 2.20462);
   };
 
-  const handleHeightUnitToggle = (newUnit: WHRMeasurementUnit) => {
-    if (newUnit === heightUnit) return;
+  // Single master toggle — converts waist, hip, height AND weight together, then flips all
+  // three unit states at once. Every value shown is derived from the precise canonical refs
+  // (never from the current, possibly-rounded, display state), so flipping back and forth
+  // is lossless; only the display rounds.
+  const unitSystem: WHRMeasurementUnit = unit === 'cm' ? 'metric' : 'imperial';
+
+  const handleUnitSystemToggle = (newSystem: WHRMeasurementUnit) => {
+    if (newSystem === unitSystem) return;
     resetCalculation();
-    if (newUnit === 'imperial') {
-      const h = parseFloat(height.toString());
-      if (!Number.isNaN(h)) {
-        const totalInches = h / 2.54;
-        let ft = Math.floor(totalInches / 12);
-        let inch = Math.round(totalInches % 12);
-        if (inch === 12) { inch = 0; ft += 1; }
-        setHeightFt(ft); setHeightIn(inch);
-      }
+    const toImperial = newSystem === 'imperial';
+
+    // Waist & hip
+    setWaist(waistCmRef.current === null ? '' : Math.round(toImperial ? waistCmRef.current / 2.54 : waistCmRef.current));
+    setHip(hipCmRef.current === null ? '' : Math.round(toImperial ? hipCmRef.current / 2.54 : hipCmRef.current));
+
+    // Height (the imperial and metric fields are separate state, so set both sides consistently)
+    if (heightCmRef.current === null) {
+      setHeight(''); setHeightFt(''); setHeightIn('');
+    } else if (toImperial) {
+      const totalInches = heightCmRef.current / 2.54;
+      let ft = Math.floor(totalInches / 12);
+      let inch = Math.round(totalInches % 12);
+      if (inch === 12) { inch = 0; ft += 1; }
+      setHeightFt(ft); setHeightIn(inch);
     } else {
-      const ft = parseFloat(heightFt.toString());
-      const inc = parseFloat(heightIn.toString());
-      if (!Number.isNaN(ft) && !Number.isNaN(inc)) {
-        setHeight(Math.round(((ft * 12) + inc) * 2.54));
-      }
+      setHeight(Math.round(heightCmRef.current));
     }
-    setHeightUnit(newUnit);
-  };
 
-  const handleWeightUnitToggle = (newUnit: WHRMeasurementUnit) => {
-    if (newUnit === weightUnit) return;
-    resetCalculation();
-    const w = parseFloat(weight.toString());
-    if (!Number.isNaN(w)) setWeight(newUnit === 'imperial' ? Math.round(w * 2.20462) : Math.round(w / 2.20462));
-    setWeightUnit(newUnit);
+    // Weight
+    setWeight(weightKgRef.current === null ? '' : Math.round(toImperial ? weightKgRef.current * 2.20462 : weightKgRef.current));
+
+    setUnit(toImperial ? 'in' : 'cm');
+    setHeightUnit(newSystem);
+    setWeightUnit(newSystem);
   };
 
   const handleCalculate = () => {
@@ -833,7 +866,7 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
       {/* eslint-disable-next-line react/no-danger */}
       <style dangerouslySetInnerHTML={{ __html: whrSelectOptionThemeCSS }} />
 
-      {/* "Where to measure" guide — opened from the button next to Measurements */}
+      {/* "Where to measure" guide — opened from the button next to Circumference measurements */}
       <Modal open={showGuideModal} onClose={() => setShowGuideModal(false)} title="Where to measure">
         <svg
           viewBox="34 0 236 270"
@@ -870,233 +903,246 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
 
       {/* INPUT CARD — unified bordered surface matching BMI/BMR/Body Fat */}
       <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
-        <div className="p-5 sm:p-6 md:p-8">
-          <div className="space-y-6">
+        <div className="p-5 sm:p-6 md:p-8 space-y-8">
 
-              {/* About you */}
+          {/* Title + master unit toggle — converts waist, hip, height & weight together */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-extrabold text-neutral-900 dark:text-white tracking-tight">Input Fields</h3>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                <SafeIcon icon={FiSliders} className="w-3 h-3" />
+                Units
+              </span>
+              <SegmentedToggle
+                groupId="whr-unit-system"
+                size="sm"
+                ariaLabel="Unit system"
+                value={unitSystem}
+                onChange={(v) => handleUnitSystemToggle(v as WHRMeasurementUnit)}
+                options={[
+                  { value: 'imperial', label: 'Imperial' },
+                  { value: 'metric', label: 'Metric' },
+                ]}
+              />
+            </div>
+          </div>
+
+          {/* Personal details — Age + Biological Sex */}
+          <div>
+            <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mb-4">Personal details</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mb-4">About you</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Biological Sex</span>
-                    <SegmentedToggle
-                      groupId="whr-sex"
-                      ariaLabel="Biological sex selection"
-                      value={gender}
-                      onChange={(v) => { setGender(v as WHRGender); if (v === 'male') setIsPregnant(false); resetCalculation(); }}
-                      options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]}
-                    />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <label htmlFor="whr-age-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                        Age<span className="align-super text-sm ml-0.5">*</span>
-                      </label>
-                      <InfoTip align="end" widthClass="w-64" text="Optional. Used only to flag results for under-18s, where the adult WHO cut-offs don't apply." />
-                    </div>
-                    <NumberField
-                      id="whr-age-input"
-                      value={age}
-                      onChange={(v) => { setAge(v); resetCalculation(); }}
-                      suffix="years"
-                      error={!!ageError}
-                      min="1" max="130"
-                      placeholder="e.g. 34"
-                    />
-                    {ageError && (
-                      <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 leading-tight">
-                        <SafeIcon icon={FiAlertCircle} className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        {ageError}
-                      </p>
-                    )}
-                  </div>
+                <div className={fieldLabelRowClass}>
+                  <label htmlFor="whr-age-input" className={fieldLabelClass}>
+                    Age <span className="text-xs font-normal">(optional)</span>
+                  </label>
+                  <InfoTip align="start" widthClass="w-64" text="Used only to flag results for under-18s, where the adult WHO cut-offs don't apply." />
                 </div>
-
-                <div className="mt-4">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200">Reference Values</span>
-                    <InfoTip
-                      widthClass="w-64"
-                      text="India adds the South Asian waist check and Asian BMI bands. The WHO waist-to-hip cut-offs stay the same for everyone."
-                    />
-                  </div>
-                  <SegmentedToggle
-                    groupId="whr-reference"
-                    ariaLabel="Reference values"
-                    value={reference}
-                    onChange={(v) => setReference(v as WHRReference)}
-                    options={[{ value: 'global', label: 'Global' }, { value: 'india', label: 'India' }]}
-                  />
-                  <p className="mt-2.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                    India adds the South Asian waist check and Asian BMI bands. WHR cut-offs stay the same.
-                  </p>
-                </div>
-              </div>
-
-              {/* Measurements */}
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Measurements</h4>
-                      <InfoTip widthClass="w-64" text="Waist: halfway between your lowest rib and the top of your hip bone. Hip: around the widest part of the buttocks, tape level all the way round." />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowGuideModal(true)}
-                      className="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-full border border-neutral-300 dark:border-neutral-600 bg-transparent text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:border-neutral-400 dark:hover:border-neutral-500 transition-colors cursor-pointer"
-                    >
-                      <SafeIcon icon={FiMaximize2} className="w-3 h-3" />
-                      How to measure
-                    </button>
-                  </div>
-                  <SegmentedToggle
-                    groupId="whr-unit-circ"
-                    size="sm"
-                    ariaLabel="Measurement unit"
-                    value={unit}
-                    onChange={(v) => handleCircumferenceUnitToggle(v as WHRCircumferenceUnit)}
-                    options={[{ value: 'cm', label: 'cm' }, { value: 'in', label: 'in' }]}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label htmlFor="whr-waist-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Waist</label>
-                    <NumberField
-                      id="whr-waist-input"
-                      value={waist}
-                      onChange={(v) => { setWaist(v); resetCalculation(); }}
-                      suffix={unitName}
-                      error={!!measurementError}
-                      min={unit === 'cm' ? '40' : '16'}
-                      max={unit === 'cm' ? '300' : '118'}
-                      placeholder={unit === 'cm' ? 'e.g. 88' : 'e.g. 35'}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="whr-hip-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Hip</label>
-                    <NumberField
-                      id="whr-hip-input"
-                      value={hip}
-                      onChange={(v) => { setHip(v); resetCalculation(); }}
-                      suffix={unitName}
-                      error={!!measurementError}
-                      min={unit === 'cm' ? '40' : '16'}
-                      max={unit === 'cm' ? '300' : '118'}
-                      placeholder={unit === 'cm' ? 'e.g. 100' : 'e.g. 39'}
-                    />
-                  </div>
-                </div>
-                <p className="mt-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  Use a soft tape, snug but not tight. Breathe out normally before reading it.
-                </p>
-                {measurementError && (
-                  <p className="mt-2.5 flex items-start gap-1.5 text-sm font-medium text-red-500">
+                <NumberField
+                  id="whr-age-input"
+                  value={age}
+                  onChange={(v) => { setAge(v); resetCalculation(); }}
+                  suffix="years"
+                  error={!!ageError}
+                  min="1" max="130"
+                  placeholder="e.g. 34"
+                />
+                {ageError && (
+                  <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 leading-tight">
                     <SafeIcon icon={FiAlertCircle} className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    {measurementError}
+                    {ageError}
                   </p>
                 )}
               </div>
 
-              {/* Pregnancy guard — female only, highlighted in a bordered card with plain background */}
-              {gender === 'female' && (
-                <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-3.5">
-                  <span className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-sm font-bold text-neutral-800 dark:text-neutral-200 leading-tight">
-                      Pregnant, or gave birth in the last two months?
-                    </span>
-                    <InfoTip
-                      widthClass="w-64"
-                      align="end"
-                      text="Waist size changes during pregnancy and in the weeks after birth, so we show your ratio without a risk category."
-                    />
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isPregnant}
-                    aria-label="Pregnant, or gave birth in the last two months"
-                    onClick={() => { setIsPregnant((p) => !p); resetCalculation(); }}
-                    className={`relative inline-flex flex-shrink-0 h-6 w-11 items-center rounded-full transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:ring-offset-2 dark:focus:ring-offset-neutral-800 ${isPregnant ? 'bg-indigo-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${isPregnant ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <span className={fieldLabelClass}>Biological Sex</span>
                 </div>
-              )}
-
-              {/* Height & weight — optional but always visible, each field has its own unit toggle */}
-              <div ref={optionalSectionRef}>
-                <div className="flex items-center gap-1.5 mb-4">
-                  <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
-                    Height &amp; Weight<span className="align-super text-sm ml-0.5">*</span>
-                  </h4>
-                  <InfoTip widthClass="w-64" text="Optional. Adds waist-to-height ratio and a BMI cross-check to your result." />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <label htmlFor="whr-height-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Height</label>
-                      <SegmentedToggle
-                        groupId="whr-unit-height"
-                        size="sm"
-                        ariaLabel="Height unit"
-                        value={heightUnit}
-                        onChange={(v) => handleHeightUnitToggle(v as WHRMeasurementUnit)}
-                        options={[{ value: 'imperial', label: 'ft' }, { value: 'metric', label: 'cm' }]}
-                      />
-                    </div>
-                    {heightUnit === 'metric' ? (
-                      <NumberField
-                        id="whr-height-input"
-                        value={height}
-                        onChange={(v) => { setHeight(v); resetCalculation(); }}
-                        suffix="cm"
-                        error={!!heightError}
-                        min="30" max="300"
-                        placeholder="e.g. 170"
-                      />
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <NumberField id="whr-height-input" value={heightFt} onChange={(v) => { setHeightFt(v); resetCalculation(); }} suffix="ft" error={!!heightError} min="1" max="9" placeholder="1-9" />
-                        <NumberField value={heightIn} onChange={(v) => { setHeightIn(v); resetCalculation(); }} suffix="in" error={!!heightError} min="0" max="11" placeholder="0-11" />
-                      </div>
-                    )}
-                    {heightError && <p className="mt-2.5 text-sm font-medium text-red-500">{heightError}</p>}
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <label htmlFor="whr-weight-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Weight</label>
-                      <SegmentedToggle
-                        groupId="whr-unit-weight"
-                        size="sm"
-                        ariaLabel="Weight unit"
-                        value={weightUnit}
-                        onChange={(v) => handleWeightUnitToggle(v as WHRMeasurementUnit)}
-                        options={[{ value: 'imperial', label: 'lbs' }, { value: 'metric', label: 'kg' }]}
-                      />
-                    </div>
-                    <NumberField
-                      id="whr-weight-input"
-                      value={weight}
-                      onChange={(v) => { setWeight(v); resetCalculation(); }}
-                      suffix={weightUnit === 'metric' ? 'kg' : 'lbs'}
-                      error={!!weightError}
-                      min={weightUnit === 'metric' ? '1' : '2'}
-                      max={weightUnit === 'metric' ? '500' : '1100'}
-                      placeholder={weightUnit === 'metric' ? 'e.g. 68' : 'e.g. 150'}
-                    />
-                    {weightError && <p className="mt-2.5 text-sm font-medium text-red-500">{weightError}</p>}
-                  </div>
-                </div>
-                <p className="mt-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  Adds waist-to-height ratio and a BMI cross-check to your result.
-                </p>
+                <SegmentedToggle
+                  groupId="whr-sex"
+                  ariaLabel="Biological sex selection"
+                  value={gender}
+                  onChange={(v) => { setGender(v as WHRGender); if (v === 'male') setIsPregnant(false); resetCalculation(); }}
+                  options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]}
+                />
               </div>
+            </div>
           </div>
+
+          {/* Reference Values — segmented tabs, 2/3 width on large screens (full width below).
+              Re-reads the result live, so it deliberately does not call resetCalculation. */}
+          <div className="lg:w-2/3">
+            <div className={fieldLabelRowClass}>
+              <span className={fieldLabelClass}>Reference Values</span>
+              <InfoTip
+                widthClass="w-64"
+                text="India adds the South Asian waist check and Asian BMI bands. The WHO waist-to-hip cut-offs stay the same for everyone."
+              />
+            </div>
+            <SegmentedToggle
+              groupId="whr-reference"
+              ariaLabel="Reference values"
+              value={reference}
+              onChange={(v) => setReference(v as WHRReference)}
+              options={[{ value: 'global', label: 'Global' }, { value: 'india', label: 'India' }]}
+            />
+            <p className="mt-2.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
+              India adds the South Asian waist check and Asian BMI bands. WHR cut-offs stay the same.
+            </p>
+          </div>
+
+          {/* Circumference measurements — Waist + Hip */}
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Circumference measurements</h4>
+                <InfoTip widthClass="w-64" text="Waist: halfway between your lowest rib and the top of your hip bone. Hip: around the widest part of the buttocks, tape level all the way round." />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGuideModal(true)}
+                className="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-full border border-neutral-300 dark:border-neutral-600 bg-transparent text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:border-neutral-400 dark:hover:border-neutral-500 transition-colors cursor-pointer"
+              >
+                <SafeIcon icon={FiMaximize2} className="w-3 h-3" />
+                How to measure
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label htmlFor="whr-waist-input" className={fieldLabelClass}>Waist</label>
+                </div>
+                <NumberField
+                  id="whr-waist-input"
+                  value={waist}
+                  onChange={(v) => { setWaist(v); syncCircumferenceCanonical(waistCmRef, v); resetCalculation(); }}
+                  suffix={unitName}
+                  error={!!measurementError}
+                  min={unit === 'cm' ? '40' : '16'}
+                  max={unit === 'cm' ? '300' : '118'}
+                  placeholder={unit === 'cm' ? 'e.g. 88' : 'e.g. 35'}
+                />
+              </div>
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label htmlFor="whr-hip-input" className={fieldLabelClass}>Hip</label>
+                </div>
+                <NumberField
+                  id="whr-hip-input"
+                  value={hip}
+                  onChange={(v) => { setHip(v); syncCircumferenceCanonical(hipCmRef, v); resetCalculation(); }}
+                  suffix={unitName}
+                  error={!!measurementError}
+                  min={unit === 'cm' ? '40' : '16'}
+                  max={unit === 'cm' ? '300' : '118'}
+                  placeholder={unit === 'cm' ? 'e.g. 100' : 'e.g. 39'}
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
+              Use a soft tape, snug but not tight. Breathe out normally before reading it.
+            </p>
+            {measurementError && (
+              <p className="mt-2.5 flex items-start gap-1.5 text-sm font-medium text-red-500">
+                <SafeIcon icon={FiAlertCircle} className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                {measurementError}
+              </p>
+            )}
+          </div>
+
+          {/* Pregnancy guard — female only. Plain field + Yes/No tabs, same 2/3 width as Reference Values. */}
+          {gender === 'female' && (
+            <div className="lg:w-2/3">
+              <div className={fieldLabelRowClass}>
+                <span className={fieldLabelClass}>Pregnant, or gave birth in the last two months?</span>
+                <InfoTip text="Waist size changes during pregnancy and after birth, so the ratio is shown without a risk category." />
+              </div>
+              <SegmentedToggle
+                groupId="whr-pregnant"
+                ariaLabel="Pregnancy status"
+                value={isPregnant ? 'yes' : 'no'}
+                onChange={(v) => { setIsPregnant(v === 'yes'); resetCalculation(); }}
+                options={[
+                  { value: 'no', label: 'No' },
+                  { value: 'yes', label: 'Yes' },
+                ]}
+              />
+            </div>
+          )}
+
+          {/* Body measurements — Height + Weight, optional but always visible */}
+          <div ref={optionalSectionRef}>
+            <div className="flex items-center gap-1.5 mb-4">
+              <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">
+                Body measurements <span className="text-xs font-normal">(optional)</span>
+              </h4>
+              <InfoTip widthClass="w-64" text="Adds waist-to-height ratio and a BMI cross-check to your result." />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label htmlFor="whr-height-input" className={fieldLabelClass}>Height</label>
+                </div>
+                {heightUnit === 'metric' ? (
+                  <NumberField
+                    id="whr-height-input"
+                    value={height}
+                    onChange={(v) => { setHeight(v); syncHeightCanonicalMetric(v); resetCalculation(); }}
+                    suffix="cm"
+                    error={!!heightError}
+                    min="30" max="300"
+                    placeholder="30-300"
+                  />
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <NumberField
+                      id="whr-height-input"
+                      ariaLabel="Height, feet"
+                      value={heightFt}
+                      onChange={(v) => { setHeightFt(v); syncHeightCanonicalImperial(v, heightIn.toString()); resetCalculation(); }}
+                      suffix="ft"
+                      error={!!heightError}
+                      min="1" max="9"
+                      placeholder="1-9"
+                    />
+                    <NumberField
+                      ariaLabel="Height, inches"
+                      value={heightIn}
+                      onChange={(v) => { setHeightIn(v); syncHeightCanonicalImperial(heightFt.toString(), v); resetCalculation(); }}
+                      suffix="in"
+                      error={!!heightError}
+                      min="0" max="11"
+                      placeholder="0-11"
+                    />
+                  </div>
+                )}
+                {heightError && <p className="mt-2.5 text-sm font-medium text-red-500">{heightError}</p>}
+              </div>
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label htmlFor="whr-weight-input" className={fieldLabelClass}>Weight</label>
+                </div>
+                <NumberField
+                  id="whr-weight-input"
+                  value={weight}
+                  onChange={(v) => { setWeight(v); syncWeightCanonical(v); resetCalculation(); }}
+                  suffix={weightUnit === 'metric' ? 'kg' : 'lbs'}
+                  error={!!weightError}
+                  min={weightUnit === 'metric' ? '1' : '2'}
+                  max={weightUnit === 'metric' ? '500' : '1100'}
+                  placeholder={weightUnit === 'metric' ? '1-500' : '2-1100'}
+                />
+                {weightError && <p className="mt-2.5 text-sm font-medium text-red-500">{weightError}</p>}
+              </div>
+            </div>
+            <p className="mt-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 leading-relaxed">
+              Adds waist-to-height ratio and a BMI cross-check to your result.
+            </p>
+          </div>
+
         </div>
       </div>
-
-      <p className="text-xs font-medium text-neutral-400 text-right px-1">* Optional — not required to calculate your ratio.</p>
 
       {/* Action Buttons */}
       <div ref={actionButtonsRef} className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-4">

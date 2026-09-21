@@ -16,7 +16,7 @@ import {
 } from '@/utils/calculators/bodyFatLogic';
 import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiChevronDown, FiDownload, FiShare2, FiMail, FiCopy, FiCheck, FiLayers, FiSliders } = FiIcons;
+const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiChevronDown, FiDownload, FiShare2, FiMail, FiCopy, FiCheck, FiLayers, FiSliders, FiMaximize2, FiX } = FiIcons;
 
 interface BodyFatCalculatorProps {
   onCalculationComplete?: () => void;
@@ -185,6 +185,64 @@ const NumberField: React.FC<{
   </div>
 );
 
+// --- MODAL (portal-based, same overlay pattern as InfoTip's createPortal use) ---
+const Modal: React.FC<{ open: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({
+  open, onClose, title, children,
+}) => {
+  const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <motion.div
+        initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm"
+        aria-hidden="true"
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className="relative w-full max-w-sm max-h-[85vh] overflow-y-auto bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-5 sm:p-6"
+      >
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <h4 className="text-base font-extrabold text-neutral-900 dark:text-white">{title}</h4>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900/60 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+          >
+            <SafeIcon icon={FiX} className="w-4 h-4" />
+          </button>
+        </div>
+        {children}
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
 const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 const slowScrollToElement = (element: HTMLElement, duration = 1800, topOffset = 24) => {
@@ -259,6 +317,12 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
   const [showSources, setShowSources] = useState<boolean>(false);
   const sourcesPanelRef = useRef<HTMLDivElement | null>(null);
   const [sourcesPulse, setSourcesPulse] = useState<boolean>(false);
+
+  // "Where to measure" guide — opened from the button next to Circumference
+  // measurements. Content is gender-conditional: Male shows Neck + Waist
+  // only, Female shows Neck + Waist + Hip (Hip isn't part of the Navy
+  // formula for men, so there's nothing useful to show for it there).
+  const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
 
   const [downloadMenuOpen, setDownloadMenuOpen] = useState<boolean>(false);
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
@@ -617,6 +681,43 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
 
   return (
     <div className="space-y-5">
+      {/* "Where to measure" guide — opened from the button next to Circumference measurements.
+          Content is gender-conditional: Male shows Neck + Waist, Female shows Neck + Waist + Hip. */}
+      <Modal open={showGuideModal} onClose={() => setShowGuideModal(false)} title="Where to measure">
+        <svg
+          viewBox="34 0 236 270"
+          className="w-full h-auto block max-w-[260px] mx-auto"
+          role="img"
+          aria-label={
+            gender === 'female'
+              ? 'Front view of a torso. The neck line sits just below the larynx. The waist line sits at the navel. The hip line sits at the widest part of the buttocks.'
+              : 'Front view of a torso. The neck line sits just below the larynx. The waist line sits at the navel.'
+          }
+        >
+          <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="text-neutral-400 dark:text-neutral-500">
+            <circle cx="100" cy="22" r="14" />
+            <path d="M86 40 C68 44 58 52 56 68 C54 92 64 112 68 132 C71 148 62 166 58 186 C56 200 60 236 64 262 L92 262 L97 210 L103 210 L108 262 L136 262 C140 236 144 200 142 186 C138 166 129 148 132 132 C136 112 146 92 144 68 C142 52 132 44 114 40" />
+          </g>
+          <g stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-indigo-500 dark:text-indigo-400">
+            <line x1="76" y1="44" x2="124" y2="44" />
+            <line x1="60" y1="139" x2="146" y2="139" />
+            {gender === 'female' && <line x1="52" y1="194" x2="146" y2="194" />}
+          </g>
+          <g fontSize="12" fontWeight="700" fill="currentColor" className="text-indigo-500 dark:text-indigo-400">
+            <text x="152" y="48">Neck (below larynx)</text>
+            <text x="152" y="143">Waist (at navel)</text>
+            {gender === 'female' && <text x="152" y="198">Hip (widest part)</text>}
+          </g>
+        </svg>
+        <ul className="mt-3 space-y-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 list-disc pl-4 leading-relaxed">
+          <li>Neck: just below the larynx (Adam&apos;s apple), tape sloping slightly downward to the front.</li>
+          <li>Waist: at the navel, tape level all the way round.</li>
+          {gender === 'female' && (
+            <li>Hip: around the widest part of the buttocks, tape level all the way round.</li>
+          )}
+        </ul>
+      </Modal>
+
       {/* INPUT CARD — unified bordered surface matching BMICalculator/BMRCalculator */}
       <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
         <div className="p-5 sm:p-6 md:p-8 space-y-8">
@@ -675,9 +776,19 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
 
           {/* Circumferences — Navy method inputs */}
           <div>
-            <div className="flex items-center gap-1.5 mb-4">
-              <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Circumference measurements</h4>
-              <InfoTip widthClass="w-64" text="Measure with a soft tape, snug but not compressing skin. Neck: below the larynx. Waist: at the navel. Hip: at the widest point." />
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Circumference measurements</h4>
+                <InfoTip widthClass="w-64" text="Measure with a soft tape, snug but not compressing skin. Neck: below the larynx. Waist: at the navel. Hip: at the widest point." />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGuideModal(true)}
+                className="inline-flex items-center gap-1 pl-2 pr-2.5 py-1 rounded-full border border-neutral-300 dark:border-neutral-600 bg-transparent text-xs font-bold text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:border-neutral-400 dark:hover:border-neutral-500 transition-colors cursor-pointer"
+              >
+                <SafeIcon icon={FiMaximize2} className="w-3 h-3" />
+                How to measure
+              </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>

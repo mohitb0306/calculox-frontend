@@ -169,14 +169,6 @@ const GOAL_STYLES: Record<string, { icon: IconType; text: string; bgLight: strin
   aggressive_bulk: { icon: FiTrendingUp, text: 'text-green-600 dark:text-green-400', bgLight: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800' },
 };
 
-// --- KCAL FORMATTER ---
-// Rounds to a whole number and adds thousands separators. Returns the number
-// only (no unit) — call sites append "/day" or "kcal" themselves. Locale is
-// pinned to en-US so server and client render identical text (no hydration
-// mismatch).
-const formatKcal = (value: number): string =>
-  Math.round(value).toLocaleString('en-US');
-
 // --- CONFIDENCE COLOR MAPPER ---
 // Same role as getCategoryColors() in BMICalculator.tsx, keyed by formula
 // spread (kcal) instead of a BMI category string. label/icon are the single

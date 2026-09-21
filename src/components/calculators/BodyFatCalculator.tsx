@@ -16,7 +16,7 @@ import {
 } from '@/utils/calculators/bodyFatLogic';
 import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiChevronDown, FiDownload, FiShare2, FiMail, FiCopy, FiCheck, FiLayers } = FiIcons;
+const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiChevronDown, FiDownload, FiShare2, FiMail, FiCopy, FiCheck, FiLayers, FiSliders } = FiIcons;
 
 interface BodyFatCalculatorProps {
   onCalculationComplete?: () => void;
@@ -214,17 +214,32 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
   const [heightFt, setHeightFt] = useState<number | string>('');
   const [heightIn, setHeightIn] = useState<number | string>('');
   const [weight, setWeight] = useState<number | string>('');
-  const [heightUnit, setHeightUnit] = useState<BodyFatUnit>('imperial');
-  const [weightUnit, setWeightUnit] = useState<BodyFatUnit>('imperial');
 
-  // Circumferences — share one unit toggle since the Navy formula always
-  // uses them together (simpler than height/weight/waist each tracking
-  // their own unit independently, which BMICalculator does for a
-  // single optional field).
   const [neck, setNeck] = useState<number | string>('');
   const [waist, setWaist] = useState<number | string>('');
   const [hip, setHip] = useState<number | string>('');
-  const [circumferenceUnit, setCircumferenceUnit] = useState<BodyFatUnit>('imperial');
+
+  // Single master unit toggle (top-right of the input card) drives
+  // height, weight and circumference fields together — no more separate
+  // per-field unit switches.
+  const [unit, setUnit] = useState<BodyFatUnit>('imperial');
+  const heightUnit = unit;
+  const weightUnit = unit;
+  const circumferenceUnit = unit;
+
+  // --- CANONICAL (PRECISE, METRIC) SOURCE OF TRUTH ---
+  // Display fields (height/weight/neck/waist/hip above) are rounded for a
+  // clean UI, but rounding must never feed back into further conversions —
+  // otherwise toggling units repeatedly drifts the value a little each time.
+  // So the *true* measurement is kept here, in metric, at full precision,
+  // updated only from what the user actually types. Unit toggles read from
+  // these refs (never from the current, possibly-rounded, display state) to
+  // recompute the display strings, so the underlying value never degrades.
+  const heightCmRef = useRef<number | null>(null);
+  const weightKgRef = useRef<number | null>(null);
+  const neckCmRef = useRef<number | null>(null);
+  const waistCmRef = useRef<number | null>(null);
+  const hipCmRef = useRef<number | null>(null);
 
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
   const [primaryBodyFat, setPrimaryBodyFat] = useState(0);
@@ -283,6 +298,29 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
     return !age && !weight && !height && !heightFt && !heightIn && !neck && !waist && !hip && !hasCalculated;
   }, [age, weight, height, heightFt, heightIn, neck, waist, hip, hasCalculated]);
 
+  // Keep the canonical (metric, unrounded) refs in sync with whatever the
+  // user actually types, converting once from the *current* display unit —
+  // never from an already-rounded intermediate value.
+  const syncHeightCanonicalMetric = (v: string) => {
+    const n = parseFloat(v);
+    heightCmRef.current = Number.isNaN(n) ? null : n;
+  };
+  const syncHeightCanonicalImperial = (ftStr: string, inStr: string) => {
+    const ft = parseFloat(ftStr);
+    const inc = parseFloat(inStr);
+    if (Number.isNaN(ft) && Number.isNaN(inc)) { heightCmRef.current = null; return; }
+    const totalInches = (Number.isNaN(ft) ? 0 : ft) * 12 + (Number.isNaN(inc) ? 0 : inc);
+    heightCmRef.current = totalInches * 2.54;
+  };
+  const syncWeightCanonical = (v: string) => {
+    const n = parseFloat(v);
+    weightKgRef.current = Number.isNaN(n) ? null : (weightUnit === 'metric' ? n : n / 2.20462);
+  };
+  const syncCircCanonical = (v: string, ref: React.MutableRefObject<number | null>) => {
+    const n = parseFloat(v);
+    ref.current = Number.isNaN(n) ? null : (circumferenceUnit === 'metric' ? n : n * 2.54);
+  };
+
   const resetCalculation = () => {
     setHasCalculated(false);
     setPrimaryBodyFat(0);
@@ -306,50 +344,54 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
     setHeight(''); setHeightFt(''); setHeightIn('');
     setWeight('');
     setNeck(''); setWaist(''); setHip('');
-    setHeightUnit('imperial'); setWeightUnit('imperial'); setCircumferenceUnit('imperial');
+    setUnit('imperial');
+    heightCmRef.current = null;
+    weightKgRef.current = null;
+    neckCmRef.current = null;
+    waistCmRef.current = null;
+    hipCmRef.current = null;
     resetCalculation();
   };
 
-  const handleHeightUnitToggle = (newUnit: BodyFatUnit) => {
-    if (newUnit === heightUnit) return;
+  // Single master toggle — converts height, weight AND circumferences
+  // together in one go, then flips the shared `unit` state once.
+  //
+  // Crucially, every value shown here is derived from the precise canonical
+  // refs (metric, never rounded) rather than from the current display
+  // state. If we instead re-converted from the previous rounded display
+  // value each time, repeated toggling (imperial -> metric -> imperial...)
+  // would compound rounding error and the calculated result would visibly
+  // drift on every flip. Reading from the untouched canonical value means
+  // toggling back and forth is always lossless — only the display rounds.
+  const handleUnitToggle = (newUnit: BodyFatUnit) => {
+    if (newUnit === unit) return;
     resetCalculation();
-    if (newUnit === 'imperial') {
-      const h = parseFloat(height.toString());
-      if (!Number.isNaN(h)) {
-        const totalInches = h / 2.54;
+
+    // Height
+    if (heightCmRef.current !== null) {
+      if (newUnit === 'imperial') {
+        const totalInches = heightCmRef.current / 2.54;
         let ft = Math.floor(totalInches / 12);
         let inch = Math.round(totalInches % 12);
         if (inch === 12) { inch = 0; ft += 1; }
         setHeightFt(ft); setHeightIn(inch);
-      }
-    } else {
-      const ft = parseFloat(heightFt.toString());
-      const inc = parseFloat(heightIn.toString());
-      if (!Number.isNaN(ft) && !Number.isNaN(inc)) {
-        setHeight(Math.round(((ft * 12) + inc) * 2.54));
+      } else {
+        setHeight(Math.round(heightCmRef.current));
       }
     }
-    setHeightUnit(newUnit);
-  };
 
-  const handleWeightUnitToggle = (newUnit: BodyFatUnit) => {
-    if (newUnit === weightUnit) return;
-    resetCalculation();
-    const w = parseFloat(weight.toString());
-    if (!Number.isNaN(w)) setWeight(newUnit === 'imperial' ? Math.round(w * 2.20462) : Math.round(w / 2.20462));
-    setWeightUnit(newUnit);
-  };
+    // Weight
+    if (weightKgRef.current !== null) {
+      setWeight(newUnit === 'imperial' ? Math.round(weightKgRef.current * 2.20462) : Math.round(weightKgRef.current));
+    }
 
-  const handleCircumferenceUnitToggle = (newUnit: BodyFatUnit) => {
-    if (newUnit === circumferenceUnit) return;
-    resetCalculation();
-    const convert = (v: number | string) => {
-      const n = parseFloat(v.toString());
-      if (Number.isNaN(n) || n <= 0) return '';
-      return newUnit === 'imperial' ? Math.round((n / 2.54) * 10) / 10 : Math.round(n * 2.54 * 10) / 10;
-    };
-    setNeck(convert(neck)); setWaist(convert(waist)); if (hip) setHip(convert(hip));
-    setCircumferenceUnit(newUnit);
+    // Circumferences
+    const displayCirc = (cm: number | null) => (cm === null ? '' : (newUnit === 'imperial' ? Math.round(cm / 2.54) : Math.round(cm)));
+    setNeck(displayCirc(neckCmRef.current));
+    setWaist(displayCirc(waistCmRef.current));
+    if (hipCmRef.current !== null) setHip(displayCirc(hipCmRef.current));
+
+    setUnit(newUnit);
   };
 
   const handleCalculate = () => {
@@ -429,23 +471,40 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
   const maxScale = gender === 'male' ? 35 : 45;
   const scaleRange = maxScale - minScale;
 
-  const bodyFatToAngle = useMemo(() => (val: number) => {
+  // --- HORIZONTAL BAR GAUGE MATH ---
+  // A third distinct shape language: a flat, segmented pill-shaped track
+  // (no needle, no ring, no tube) with a floating diamond marker that
+  // slides left-to-right to the current value's position.
+  const bodyFatToPercent = useMemo(() => (val: number) => {
     const clamped = Math.min(Math.max(val, minScale), maxScale);
-    return ((clamped - minScale) / scaleRange) * 180;
+    return ((clamped - minScale) / scaleRange) * 100;
   }, [scaleRange, maxScale]);
 
-  const describeArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
-    const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
-      const angleInRadians = ((angle - 180) * Math.PI) / 180.0;
-      return { x: cx + r * Math.cos(angleInRadians), y: cy + r * Math.sin(angleInRadians) };
-    };
-    const start = polarToCartesian(x, y, radius, endAngle);
-    const end = polarToCartesian(x, y, radius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-    return ['M', start.x, start.y, 'A', radius, radius, 0, largeArcFlag, 0, end.x, end.y].join(' ');
-  };
+  const markerPercent = useMemo(() => (!hasCalculated || hasError) ? 0 : bodyFatToPercent(primaryBodyFat), [hasCalculated, hasError, bodyFatToPercent, primaryBodyFat]);
 
-  const needleAngle = useMemo(() => (!hasCalculated || hasError) ? -90 : bodyFatToAngle(primaryBodyFat) - 90, [hasCalculated, hasError, bodyFatToAngle, primaryBodyFat]);
+  // Category bands don't start at 0 (e.g. "Essential fat" starts at 2%,
+  // not the scale's 0%), so each segment's LEFT edge is chained to the
+  // previous segment's right edge rather than its own range.min — this
+  // guarantees the colored zones always sum to exactly 100% width with
+  // no gap, regardless of how the category boundaries are defined.
+  // Intermediate tick labels along the bar (10, 15, 20, 25, 30 for the
+  // male 0–35 scale; extends the same every-5 pattern for the female
+  // 0–45 scale). The 0% and max%+ endpoints are rendered separately.
+  const tickValues = useMemo(() => {
+    const ticks: number[] = [];
+    for (let v = 10; v <= maxScale - 5; v += 5) ticks.push(v);
+    return ticks;
+  }, [maxScale]);
+
+  const gaugeSegments = useMemo(() => {
+    let prevPercent = 0;
+    return bodyFatRanges.map((range) => {
+      const rightPercent = bodyFatToPercent(range.max);
+      const widthPct = Math.max(0, rightPercent - prevPercent);
+      prevPercent = rightPercent;
+      return { category: range.category, widthPct, hex: getCategoryColors(range.category).hex };
+    });
+  }, [bodyFatRanges, bodyFatToPercent]);
 
   const springConfig = prefersReducedMotion ? { duration: 0 } : { type: "spring" as const, stiffness: 50, damping: 12, mass: 0.8 };
 
@@ -562,6 +621,18 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
       <div className="bg-white dark:bg-neutral-800 rounded-3xl border border-neutral-200 dark:border-neutral-700 shadow-sm">
         <div className="p-5 sm:p-6 md:p-8 space-y-8">
 
+          {/* Master unit toggle — converts height, weight & circumferences together */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-extrabold text-neutral-900 dark:text-white tracking-tight">Input Fields</h3>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                <SafeIcon icon={FiSliders} className="w-3 h-3" />
+                Units
+              </span>
+              <SegmentedToggle groupId="bf-unit-system" size="sm" ariaLabel="Unit system" value={unit} onChange={(v) => handleUnitToggle(v as BodyFatUnit)} options={[{ value: 'imperial', label: 'Imperial' }, { value: 'metric', label: 'Metric' }]} />
+            </div>
+          </div>
+
           {/* Personal details */}
           <div>
             <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mb-4">Personal details</h4>
@@ -583,26 +654,20 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
             <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400 mb-4">Body measurements</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2.5 min-h-[38px]">
-                  <label htmlFor="bf-height-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200">Height</label>
-                  <SegmentedToggle groupId="bf-unit-height" size="sm" ariaLabel="Height unit" value={heightUnit} onChange={(v) => handleHeightUnitToggle(v as BodyFatUnit)} options={[{ value: 'imperial', label: 'ft' }, { value: 'metric', label: 'cm' }]} />
-                </div>
+                <label htmlFor="bf-height-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5 block">Height</label>
                 {heightUnit === 'metric' ? (
-                  <NumberField id="bf-height-input" value={height} onChange={(v) => { setHeight(v); resetCalculation(); }} suffix="cm" error={!!heightError} min="30" max="300" placeholder="30-300" />
+                  <NumberField id="bf-height-input" value={height} onChange={(v) => { setHeight(v); syncHeightCanonicalMetric(v); resetCalculation(); }} suffix="cm" error={!!heightError} min="30" max="300" placeholder="30-300" />
                 ) : (
                   <div className="grid grid-cols-2 gap-2.5">
-                    <NumberField id="bf-height-input" value={heightFt} onChange={(v) => { setHeightFt(v); resetCalculation(); }} suffix="ft" error={!!heightError} min="1" max="9" placeholder="1-9" />
-                    <NumberField value={heightIn} onChange={(v) => { setHeightIn(v); resetCalculation(); }} suffix="in" error={!!heightError} min="0" max="11" placeholder="0-11" />
+                    <NumberField id="bf-height-input" value={heightFt} onChange={(v) => { setHeightFt(v); syncHeightCanonicalImperial(v, heightIn.toString()); resetCalculation(); }} suffix="ft" error={!!heightError} min="1" max="9" placeholder="1-9" />
+                    <NumberField value={heightIn} onChange={(v) => { setHeightIn(v); syncHeightCanonicalImperial(heightFt.toString(), v); resetCalculation(); }} suffix="in" error={!!heightError} min="0" max="11" placeholder="0-11" />
                   </div>
                 )}
                 {heightError && <p className="mt-2.5 text-sm font-medium text-red-500">{heightError}</p>}
               </div>
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2.5 min-h-[38px]">
-                  <label htmlFor="bf-weight-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200">Weight</label>
-                  <SegmentedToggle groupId="bf-unit-weight" size="sm" ariaLabel="Weight unit" value={weightUnit} onChange={(v) => handleWeightUnitToggle(v as BodyFatUnit)} options={[{ value: 'imperial', label: 'lbs' }, { value: 'metric', label: 'kg' }]} />
-                </div>
-                <NumberField id="bf-weight-input" value={weight} onChange={(v) => { setWeight(v); resetCalculation(); }} suffix={weightUnit === 'metric' ? 'kg' : 'lbs'} error={!!weightError} min={weightUnit === 'metric' ? '1' : '2'} max={weightUnit === 'metric' ? '500' : '1100'} placeholder={weightUnit === 'metric' ? '1-500' : '2-1100'} />
+                <label htmlFor="bf-weight-input" className="text-sm font-bold text-neutral-800 dark:text-neutral-200 mb-2.5 block">Weight</label>
+                <NumberField id="bf-weight-input" value={weight} onChange={(v) => { setWeight(v); syncWeightCanonical(v); resetCalculation(); }} suffix={weightUnit === 'metric' ? 'kg' : 'lbs'} error={!!weightError} min={weightUnit === 'metric' ? '1' : '2'} max={weightUnit === 'metric' ? '500' : '1100'} placeholder={weightUnit === 'metric' ? '1-500' : '2-1100'} />
                 {weightError && <p className="mt-2.5 text-sm font-medium text-red-500">{weightError}</p>}
               </div>
             </div>
@@ -610,27 +675,24 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
 
           {/* Circumferences — Navy method inputs */}
           <div>
-            <div className="flex items-center justify-between gap-2 mb-4">
-              <div className="flex items-center gap-1.5">
-                <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Circumference measurements</h4>
-                <InfoTip widthClass="w-64" text="Measure with a soft tape, snug but not compressing skin. Neck: below the larynx. Waist: at the navel. Hip: at the widest point." />
-              </div>
-              <SegmentedToggle groupId="bf-unit-circ" size="sm" ariaLabel="Circumference unit" value={circumferenceUnit} onChange={(v) => handleCircumferenceUnitToggle(v as BodyFatUnit)} options={[{ value: 'imperial', label: 'in' }, { value: 'metric', label: 'cm' }]} />
+            <div className="flex items-center gap-1.5 mb-4">
+              <h4 className="text-sm font-bold text-neutral-500 dark:text-neutral-400">Circumference measurements</h4>
+              <InfoTip widthClass="w-64" text="Measure with a soft tape, snug but not compressing skin. Neck: below the larynx. Waist: at the navel. Hip: at the widest point." />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
                 <label htmlFor="bf-neck-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Neck</label>
-                <NumberField id="bf-neck-input" value={neck} onChange={(v) => { setNeck(v); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} placeholder={circumferenceUnit === 'metric' ? 'e.g. 39' : 'e.g. 15.5'} />
+                <NumberField id="bf-neck-input" value={neck} onChange={(v) => { setNeck(v); syncCircCanonical(v, neckCmRef); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} placeholder={circumferenceUnit === 'metric' ? 'e.g. 39' : 'e.g. 15.5'} />
               </div>
               <div>
                 <label htmlFor="bf-waist-input" className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2 block">Waist</label>
-                <NumberField id="bf-waist-input" value={waist} onChange={(v) => { setWaist(v); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} placeholder={circumferenceUnit === 'metric' ? 'e.g. 91' : 'e.g. 36'} />
+                <NumberField id="bf-waist-input" value={waist} onChange={(v) => { setWaist(v); syncCircCanonical(v, waistCmRef); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} placeholder={circumferenceUnit === 'metric' ? 'e.g. 91' : 'e.g. 36'} />
               </div>
               <div>
                 <label htmlFor="bf-hip-input" className={`text-sm font-medium mb-2 block ${gender === 'female' ? 'text-neutral-700 dark:text-neutral-300' : 'text-neutral-400 dark:text-neutral-600'}`}>
                   Hip {gender === 'male' && <span className="text-xs font-normal">(women only)</span>}
                 </label>
-                <NumberField id="bf-hip-input" value={hip} onChange={(v) => { setHip(v); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} disabled={gender === 'male'} placeholder={circumferenceUnit === 'metric' ? 'e.g. 99' : 'e.g. 39'} />
+                <NumberField id="bf-hip-input" value={hip} onChange={(v) => { setHip(v); syncCircCanonical(v, hipCmRef); resetCalculation(); }} suffix={circumferenceUnit === 'metric' ? 'cm' : 'in'} error={!!circumferenceError} disabled={gender === 'male'} placeholder={circumferenceUnit === 'metric' ? 'e.g. 99' : 'e.g. 39'} />
               </div>
             </div>
             {circumferenceError && <p className="mt-2.5 flex items-start gap-1.5 text-sm font-medium text-red-500"><SafeIcon icon={FiAlertCircle} className="w-4 h-4 flex-shrink-0 mt-0.5" />{circumferenceError}</p>}
@@ -689,30 +751,45 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
               <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900/50 px-3 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700">US Navy Method</span>
             </div>
 
-            <div className="relative w-full max-w-[360px] mx-auto z-10">
-              <svg viewBox="0 0 400 220" className="w-full h-auto overflow-visible filter drop-shadow-sm" aria-hidden="true">
-                <path d={describeArc(200, 180, 150, 0, 180)} fill="none" stroke="currentColor" strokeWidth="30" strokeLinecap="round" className="text-neutral-100 dark:text-neutral-700/50" />
-                {bodyFatRanges.map((range, i) => {
-                  const startAngle = bodyFatToAngle(range.min);
-                  const endAngle = bodyFatToAngle(range.max);
-                  const segmentColors = getCategoryColors(range.category);
-                  return (
-                    <path key={i} d={describeArc(200, 180, 150, startAngle, endAngle - (i === bodyFatRanges.length - 1 ? 0 : 1.5))} fill="none" stroke={segmentColors.hex} strokeWidth="30" strokeLinecap="butt" className="transition-all duration-700 ease-in-out" />
-                  );
-                })}
-                <text x="15" y="195" fontSize="14" fontWeight="700" fill="currentColor" className="text-neutral-400 dark:text-neutral-500">{minScale}%</text>
-                <text x="385" y="195" fontSize="14" fontWeight="700" fill="currentColor" textAnchor="end" className="text-neutral-400 dark:text-neutral-500">{maxScale}%+</text>
-                <motion.g initial={{ rotate: -90 }} animate={{ rotate: needleAngle }} transition={springConfig} style={{ originX: "50%", originY: "50%" }} className="drop-shadow-lg">
-                  <polygon points="197,180 200,35 203,180" className="fill-neutral-800 dark:fill-neutral-200" />
-                  <circle cx="200" cy="180" r="14" className="fill-neutral-800 dark:fill-neutral-200" />
-                  <circle cx="200" cy="180" r="5" className="fill-white dark:fill-neutral-900" />
-                </motion.g>
-              </svg>
-              <div className="flex flex-col items-center justify-center mt-4 z-20">
-                <motion.span key={primaryBodyFat} initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`text-4xl md:text-5xl font-extrabold tracking-tight drop-shadow-sm ${currentColors.text}`} aria-live="polite">
-                  {primaryBodyFat.toFixed(1)}%
-                </motion.span>
-                <span className={`text-sm font-bold uppercase tracking-[0.15em] mt-1 ${currentColors.text}`}>{category}</span>
+            <div className="flex flex-col items-center mt-1 mb-7 z-10">
+              <motion.span key={primaryBodyFat} initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className={`text-4xl md:text-5xl font-extrabold tracking-tight drop-shadow-sm ${currentColors.text}`} aria-live="polite">
+                {primaryBodyFat.toFixed(1)}%
+              </motion.span>
+              <span className={`text-sm font-bold uppercase tracking-[0.15em] mt-1 ${currentColors.text}`}>{category}</span>
+            </div>
+
+            <div className="relative w-full max-w-[440px] mx-auto z-10 pt-7 px-2">
+              {/* Floating diamond marker, slides horizontally to the current value */}
+              <motion.div
+                initial={false}
+                animate={{ left: `${markerPercent}%` }}
+                transition={springConfig}
+                style={{ transform: 'translateX(-50%)' }}
+                className="absolute top-0 flex flex-col items-center"
+              >
+                <div className="w-4 h-4 rotate-45 rounded-[3px] shadow-md ring-2 ring-white dark:ring-neutral-900 transition-colors duration-700" style={{ backgroundColor: currentColors.hex }} />
+                <div className="w-0.5 h-3 -mt-1 transition-colors duration-700" style={{ backgroundColor: currentColors.hex }} />
+              </motion.div>
+
+              {/* Segmented pill track — flush colored zones per category */}
+              <div className="flex w-full h-4 rounded-full overflow-hidden shadow-inner border border-black/5 dark:border-white/10">
+                {gaugeSegments.map((seg) => (
+                  <div key={seg.category} style={{ width: `${seg.widthPct}%`, backgroundColor: seg.hex }} className="h-full transition-colors duration-700" />
+                ))}
+              </div>
+
+              {/* Scale ticks + labels — every 5%, plus the two endpoints */}
+              <div className="relative w-full h-2 mt-1.5">
+                {tickValues.map((v) => (
+                  <div key={v} className="absolute top-0 w-px h-2 bg-neutral-300 dark:bg-neutral-600" style={{ left: `${bodyFatToPercent(v)}%` }} />
+                ))}
+              </div>
+              <div className="relative w-full h-4 mt-1 text-xs font-bold text-neutral-400 dark:text-neutral-500">
+                <span className="absolute left-0">{minScale}%</span>
+                {tickValues.map((v) => (
+                  <span key={v} className="absolute -translate-x-1/2" style={{ left: `${bodyFatToPercent(v)}%` }}>{v}%</span>
+                ))}
+                <span className="absolute right-0">{maxScale}%+</span>
               </div>
             </div>
           </div>

@@ -401,6 +401,13 @@ const formatKcal = (n: number): string => `${Math.round(n).toLocaleString()} kca
 interface SegmentedToggleOption<T extends string> {
   value: T;
   label: string;
+  /** Optional compact label shown below the `sm` breakpoint instead of
+   * `label`. Only needed for toggles with 3+ options and/or long labels
+   * (e.g. Trimester) where the full text can't fit each segment on a
+   * narrow phone without wrapping the pill to two lines. Two-option
+   * toggles with short labels (Male/Female, Yes/No) don't need this —
+   * omitting it keeps `label` shown at every width, unchanged. */
+  shortLabel?: string;
 }
 function SegmentedToggle<T extends string>({
   value, onChange, options, groupId, ariaLabel, size = 'md',
@@ -435,7 +442,7 @@ function SegmentedToggle<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(opt.value)}
-            className={`relative rounded-full transition-colors duration-150 cursor-pointer ${
+            className={`relative rounded-full whitespace-nowrap transition-colors duration-150 cursor-pointer ${
               isSm ? 'px-3.5 py-1.5 text-xs' : 'flex-1 px-4 py-2.5 text-sm'
             } ${
               active ? 'text-white font-bold' : 'text-neutral-500 dark:text-neutral-400 font-semibold hover:text-neutral-700 dark:hover:text-neutral-200'
@@ -457,7 +464,16 @@ function SegmentedToggle<T extends string>({
                 transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 34 }}
               />
             )}
-            <span className="relative z-10">{opt.label}</span>
+            <span className="relative z-10">
+              {opt.shortLabel ? (
+                <>
+                  <span className="sm:hidden">{opt.shortLabel}</span>
+                  <span className="hidden sm:inline">{opt.label}</span>
+                </>
+              ) : (
+                opt.label
+              )}
+            </span>
           </button>
         );
       })}
@@ -1484,9 +1500,9 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                     value={trimester}
                     onChange={setTrimester}
                     options={[
-                      { value: 'first', label: '1st Trimester' },
-                      { value: 'second', label: '2nd Trimester' },
-                      { value: 'third', label: '3rd Trimester' },
+                      { value: 'first', label: '1st Trimester', shortLabel: '1st' },
+                      { value: 'second', label: '2nd Trimester', shortLabel: '2nd' },
+                      { value: 'third', label: '3rd Trimester', shortLabel: '3rd' },
                     ]}
                   />
                 </div>
@@ -1617,7 +1633,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
             <p className="text-sm font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
               {isSingleFormulaMode && selectedFormulaResult ? effectiveBmrLabel : 'Mifflin-St Jeor (Primary)'}
             </p>
-            <p className={`text-5xl sm:text-6xl font-black tracking-tight ${isSingleFormulaMode && selectedFormulaResult ? SINGLE_FORMULA_COLORS.text : confidenceColors.text}`}>
+            <p className={`text-5xl md:text-6xl font-black tracking-tight ${isSingleFormulaMode && selectedFormulaResult ? SINGLE_FORMULA_COLORS.text : confidenceColors.text}`}>
               {Math.round(effectiveBmr).toLocaleString()}
             </p>
             <p className="mt-1 text-base font-semibold text-neutral-600 dark:text-neutral-300">
@@ -1792,7 +1808,7 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
                   <p className="text-sm font-bold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-2">
                     Your Daily Target
                   </p>
-                  <p className="text-4xl sm:text-5xl font-black text-neutral-900 dark:text-white tracking-tight">
+                  <p className="text-4xl md:text-5xl font-black text-neutral-900 dark:text-white tracking-tight">
                     {formatKcal(dailyTargetBreakdown.totalCalories)}
                   </p>
                   <p className="mt-1.5 text-sm font-semibold text-neutral-500 dark:text-neutral-400">

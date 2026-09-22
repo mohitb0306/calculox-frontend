@@ -889,7 +889,12 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
                 ))}
               </div>
 
-              {/* Scale ticks + labels — every 5%, plus the two endpoints */}
+              {/* Scale ticks + labels — tick marks (the small lines above)
+                  stay at every 5% on every screen size; the text labels
+                  below them only show every 10% on mobile (plus the two
+                  endpoints) since the female 0–45% scale has 9 labels and
+                  text-xs digits start crowding on a narrow phone. Full
+                  every-5% labels return from sm: up where there's room. */}
               <div className="relative w-full h-2 mt-1.5">
                 {tickValues.map((v) => (
                   <div key={v} className="absolute top-0 w-px h-2 bg-neutral-300 dark:bg-neutral-600" style={{ left: `${bodyFatToPercent(v)}%` }} />
@@ -898,7 +903,7 @@ const BodyFatCalculator: React.FC<BodyFatCalculatorProps> = ({ onCalculationComp
               <div className="relative w-full h-4 mt-1 text-xs font-bold text-neutral-400 dark:text-neutral-500">
                 <span className="absolute left-0">{minScale}%</span>
                 {tickValues.map((v) => (
-                  <span key={v} className="absolute -translate-x-1/2" style={{ left: `${bodyFatToPercent(v)}%` }}>{v}%</span>
+                  <span key={v} className={`absolute -translate-x-1/2 ${v % 10 !== 0 ? 'hidden sm:inline' : ''}`} style={{ left: `${bodyFatToPercent(v)}%` }}>{v}%</span>
                 ))}
                 <span className="absolute right-0">{maxScale}%+</span>
               </div>

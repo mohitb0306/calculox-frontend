@@ -231,14 +231,14 @@ const NumberField: React.FC<{
 );
 
 // --- STATUS PILL (mockup's .pill) ---
-const StatusPill: React.FC<{ tone: 'ok' | 'warn' | 'bad' | 'neutral'; children: React.ReactNode }> = ({ tone, children }) => {
+const StatusPill: React.FC<{ tone: 'ok' | 'warn' | 'bad' | 'neutral'; children: React.ReactNode; className?: string }> = ({ tone, children, className = '' }) => {
   const toneClass =
     tone === 'ok' ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 ring-green-100 dark:ring-green-800/40'
     : tone === 'warn' ? 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 ring-yellow-100 dark:ring-yellow-800/40'
     : tone === 'bad' ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 ring-red-100 dark:ring-red-800/40'
     : 'bg-neutral-100 dark:bg-neutral-900/50 text-neutral-600 dark:text-neutral-300 ring-neutral-200 dark:ring-neutral-700';
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs sm:text-[13px] font-bold ring-1 whitespace-nowrap ${toneClass}`}>
+    <span className={`inline-flex items-center justify-center text-center gap-1.5 rounded-full px-3 py-1.5 text-xs sm:text-[13px] font-bold leading-snug whitespace-normal ring-1 ${toneClass} ${className}`}>
       {children}
     </span>
   );
@@ -1262,42 +1262,48 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
                   </div>
                 </div>
 
-                <div className="divide-y divide-neutral-200/70 dark:divide-neutral-700/50">
-                  <div className="flex items-center justify-between gap-3 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="flex flex-col justify-between gap-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700/50 px-4 sm:px-5 py-4">
                     <div className="min-w-0">
                       <span className="block text-sm font-bold text-neutral-800 dark:text-neutral-200">Waist circumference — general</span>
-                      <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">
                         {showLen(snapshot!.waistCm)} {unitName} · risk from {showLen(results.waistRisk.increasedThresholdCm)} {unitName}, substantial from {showLen(results.waistRisk.substantialThresholdCm)} {unitName}
-                      </span>
+                      </p>
                     </div>
-                    <StatusPill tone={results.waistRisk.level === 'low' ? 'ok' : results.waistRisk.level === 'increased' ? 'warn' : 'bad'}>
-                      {results.waistRisk.label}
-                    </StatusPill>
+                    <div>
+                      <StatusPill tone={results.waistRisk.level === 'low' ? 'ok' : results.waistRisk.level === 'increased' ? 'warn' : 'bad'}>
+                        {results.waistRisk.label}
+                      </StatusPill>
+                    </div>
                   </div>
 
                   {results.southAsian && (
-                    <div className="flex items-center justify-between gap-3 py-4">
+                    <div className="flex flex-col justify-between gap-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700/50 px-4 sm:px-5 py-4">
                       <div className="min-w-0">
                         <span className="block text-sm font-bold text-neutral-800 dark:text-neutral-200">Waist circumference — South Asian</span>
-                        <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">Stricter threshold: {showLen(results.southAsian.thresholdCm)} {unitName}</span>
+                        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">Stricter threshold: {showLen(results.southAsian.thresholdCm)} {unitName}</p>
                       </div>
-                      <StatusPill tone={results.southAsian.atOrAbove ? 'warn' : 'ok'}>
-                        {results.southAsian.atOrAbove ? `At or above ${showLen(results.southAsian.thresholdCm)} ${unitName}` : `Below ${showLen(results.southAsian.thresholdCm)} ${unitName}`}
-                      </StatusPill>
+                      <div>
+                        <StatusPill tone={results.southAsian.atOrAbove ? 'warn' : 'ok'}>
+                          {results.southAsian.atOrAbove ? `At or above ${showLen(results.southAsian.thresholdCm)} ${unitName}` : `Below ${showLen(results.southAsian.thresholdCm)} ${unitName}`}
+                        </StatusPill>
+                      </div>
                     </div>
                   )}
 
                   {results.whtr ? (
-                    <div className="flex items-center justify-between gap-3 py-4">
+                    <div className="flex flex-col justify-between gap-3 rounded-2xl bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700/50 px-4 sm:px-5 py-4">
                       <div className="min-w-0">
                         <span className="block text-sm font-bold text-neutral-800 dark:text-neutral-200">Waist-to-height ratio</span>
-                        <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed">
                           {results.whtr.whtr.toFixed(2)} · flags at {results.whtr.boundary.toFixed(2)} or above
-                        </span>
+                        </p>
                       </div>
-                      <StatusPill tone={results.whtr.aboveBoundary ? 'warn' : 'ok'}>
-                        {results.whtr.aboveBoundary ? `Above ${results.whtr.boundary.toFixed(2)}` : `Under ${results.whtr.boundary.toFixed(2)}`}
-                      </StatusPill>
+                      <div>
+                        <StatusPill tone={results.whtr.aboveBoundary ? 'warn' : 'ok'}>
+                          {results.whtr.aboveBoundary ? `Above ${results.whtr.boundary.toFixed(2)}` : `Under ${results.whtr.boundary.toFixed(2)}`}
+                        </StatusPill>
+                      </div>
                     </div>
                   ) : (
                     <button
@@ -1305,12 +1311,15 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
                       onClick={() => {
                         window.requestAnimationFrame(() => optionalSectionRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'center' }));
                       }}
-                      className="w-full flex items-center justify-between gap-3 py-4 text-left cursor-pointer group"
+                      className="flex flex-col items-start justify-center gap-2 rounded-2xl border border-dashed border-neutral-200 dark:border-neutral-700 px-4 sm:px-5 py-4 text-left cursor-pointer hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-500/5 transition-colors group"
                     >
-                      <span className="text-sm font-semibold text-neutral-400 dark:text-neutral-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      <span className="text-sm font-semibold text-neutral-400 dark:text-neutral-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-relaxed">
                         Add height to also see waist-to-height ratio
                       </span>
-                      <SafeIcon icon={FiMaximize2} className="w-3.5 h-3.5 flex-shrink-0 text-neutral-300 dark:text-neutral-600 group-hover:text-indigo-500 transition-colors" />
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-300 dark:text-neutral-600 group-hover:text-indigo-500 transition-colors">
+                        <SafeIcon icon={FiMaximize2} className="w-3.5 h-3.5 flex-shrink-0" />
+                        Add height
+                      </span>
                     </button>
                   )}
                 </div>

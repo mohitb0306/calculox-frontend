@@ -8,13 +8,17 @@ import BMICalculator from "./BMICalculator";
 import BMRCalculator from "./BMRCalculator";
 import BodyFatCalculator from "./BodyFatCalculator";
 import WHRCalculator from "./WHRCalculator";
+import ChronologicalAgeCalculator from "./ChronologicalAgeCalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
 export const SIPCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">SIP Calculator Component (Coming Soon)</div>;
 export const GSTCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">GST Calculator Component (Coming Soon)</div>;
 export const PercentageCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Percentage Calculator Component (Coming Soon)</div>;
-export const AgeCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Age Calculator Component (Coming Soon)</div>;
+// Birthday Calculator and Age Difference Calculator remain placeholders —
+// next in the shared-dateLogic.ts family, per the agreed build order.
+export const BirthdayCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Birthday Calculator Component (Coming Soon)</div>;
+export const AgeDifferenceCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Age Difference Calculator Component (Coming Soon)</div>;
 
 // --- REGISTRY MAPPING ---
 export const renderCalculatorComponent = (key: string, props: any) => {
@@ -60,8 +64,19 @@ export const renderCalculatorComponent = (key: string, props: any) => {
         
     case "age": 
     case "age-calculator":
-        return <AgeCalculator {...props} />;
-        
+    case "chronological-age":
+    case "chronological-age-calculator":
+        return <ChronologicalAgeCalculator {...props} />;
+
+    case "birthday":
+    case "birthday-calculator":
+        return <BirthdayCalculator {...props} />;
+
+    case "age-difference":
+    case "age-difference-calculator":
+    case "age-gap-calculator":
+        return <AgeDifferenceCalculator {...props} />;
+
     default: 
       // This UI matches the old CalculatorPage.jsx default case exactly
       return (

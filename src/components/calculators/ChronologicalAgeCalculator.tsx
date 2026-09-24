@@ -1615,16 +1615,19 @@ const DayCountTrail: React.FC<{ items: ReturnType<typeof getDayCountMilestones>;
           const y0 = i % 2 === 0 ? 24 : 76;
           const y1 = (i + 1) % 2 === 0 ? 24 : 76;
           const midX = (x0 + x1) / 2;
+          // A segment is only "travelled" if BOTH milestones it joins are
+          // reached; the leg into the next milestone stays dashed/grey.
+          const segmentReached = dm.achieved && items[i + 1].achieved;
           return (
             <path
               key={dm.dayCount}
               d={`M ${x0} ${y0} C ${midX} ${y0}, ${midX} ${y1}, ${x1} ${y1}`}
               fill="none"
-              stroke={dm.achieved ? `url(#dayTrail-${safeUid}-${i})` : 'currentColor'}
-              className={dm.achieved ? '' : 'text-neutral-300 dark:text-neutral-600'}
+              stroke={segmentReached ? `url(#dayTrail-${safeUid}-${i})` : 'currentColor'}
+              className={segmentReached ? '' : 'text-neutral-300 dark:text-neutral-600'}
               strokeWidth={2}
               strokeLinecap="round"
-              strokeDasharray={dm.achieved ? undefined : '4 5'}
+              strokeDasharray={segmentReached ? undefined : '4 5'}
               vectorEffect="non-scaling-stroke"
             />
           );
@@ -1664,7 +1667,7 @@ const DayCountTrail: React.FC<{ items: ReturnType<typeof getDayCountMilestones>;
                   neighbour. Clamped so it is never tiny or oversized. The
                   text-[11px]/text-sm classes are the no-cqw fallback. */}
               <span
-                className={`block text-sm font-extrabold tabular-nums leading-tight ${dm.achieved ? palette.text : 'text-neutral-900 dark:text-white'}`}
+                className={`block text-sm font-extrabold tabular-nums leading-tight ${dm.achieved ? palette.text : isNext ? 'text-neutral-700 dark:text-neutral-200' : 'text-neutral-500 dark:text-neutral-400'}`}
                 style={{ fontSize: 'clamp(0.8125rem, 2.4cqw, 1.0625rem)' }}
               >
                 {formatWithCommas(dm.dayCount)}

@@ -13,7 +13,6 @@ import {
   getMilestoneBirthdays,
   getNextMilestone,
   getDayCountMilestones,
-  calculatePetYears,
   getLifetimeEstimates,
   getBirthdayWeekdayTally,
   getNextSameWeekdayBirthdayYear,
@@ -1303,7 +1302,7 @@ const NextBirthdayCard: React.FC<NextBirthdayCardProps> = ({ info, asOf, isLive,
 
 // --- SHARED RESULT-SECTION PRIMITIVES ---
 // Every result card below the headline (Exact Totals, Milestone Birthdays,
-// Day-Count Milestones, Pet Years, Lifetime Estimates, Curiosities) is built
+// Day-Count Milestones, Lifetime Estimates, Curiosities) is built
 // from the same few pieces so spacing, radii, type scale, gradients and
 // glows are defined once and cannot drift apart:
 //   ResultCard      — the card shell (border, radius, surface, ambient glow)
@@ -1407,7 +1406,7 @@ const CountBadge: React.FC<{ achieved: number; total: number }> = ({ achieved, t
 );
 
 // Saturated gradient number tile — the single stat treatment used by Exact
-// Totals, Pet Years and Lifetime Estimates. Centered, same padding, same
+// Totals and Lifetime Estimates. Centered, same padding, same
 // icon chip, same label/sub type scale.
 const StatTile: React.FC<{
   tone: TileTone;
@@ -1890,12 +1889,6 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
     return getDayCountMilestones(committedBirthDate, effectiveAsOf);
   }, [hasCalculated, hasError, committedBirthDate, effectiveAsOf]);
 
-  const petYears = useMemo(() => {
-    if (!ageBreakdown) return null;
-    const ageInYears = ageBreakdown.years + ageBreakdown.months / 12 + ageBreakdown.days / 365.2425;
-    return calculatePetYears(ageInYears);
-  }, [ageBreakdown]);
-
   const lifetimeEstimates = useMemo(() => {
     if (!ageBreakdown) return null;
     return getLifetimeEstimates(ageBreakdown.totalMinutes);
@@ -1989,17 +1982,6 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
       });
     }
 
-    if (petYears) {
-      sections.push({
-        heading: 'Equivalent Age',
-        rows: [
-          { label: 'Dog Years', value: `${petYears.dogYears}` },
-          { label: 'Cat Years', value: `${petYears.catYears}` },
-        ],
-        variant: 'output',
-      });
-    }
-
     const inputRows: Array<{ label: string; value: string }> = [
       {
         label: 'Date of Birth',
@@ -2025,7 +2007,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
         : 'For informational purposes only.',
       fileNameBase: `chronological-age-${ageBreakdown.years}`,
     };
-  }, [hasCalculated, hasError, ageBreakdown, committedBirthDate, committedBirthTimeUnknown, effectiveAsOf, nextBirthday, nextMilestone, petYears, committedAsOfMode, isApproximate]);
+  }, [hasCalculated, hasError, ageBreakdown, committedBirthDate, committedBirthTimeUnknown, effectiveAsOf, nextBirthday, nextMilestone, committedAsOfMode, isApproximate]);
 
   useEffect(() => {
     onReportChange?.(report);
@@ -2396,59 +2378,14 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
             </ResultCard>
           )}
 
-          {/* PET YEARS */}
-          {petYears && (
-            <ResultCard>
-              <SectionHeader
-                icon={FiHeart}
-                title="Your Age, In Pet Years"
-                subtitle="A playful equivalence based on modern, non-linear aging tables."
-                tip="A playful equivalence using the modern, non-linear dog/cat aging tables — not the old '×7' myth, and not a biological claim."
-              />
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <StatTile tone="amber" emoji="🐶" value={String(petYears.dogYears)} label="Dog Years" maxRem={2.25} />
-                <StatTile tone="sky" emoji="🐱" value={String(petYears.catYears)} label="Cat Years" maxRem={2.25} />
-              </div>
-
-              {/* Same-scale comparison: you vs. dog vs. cat */}
-              <div className="space-y-2.5">
-                {[
-                  { label: 'You', icon: '🙂', value: ageBreakdown.years, barClass: 'from-violet-400 to-violet-600', chip: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200/70 dark:border-violet-800/50' },
-                  { label: 'Dog', icon: '🐶', value: petYears.dogYears, barClass: 'from-amber-400 to-amber-600', chip: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200/70 dark:border-amber-800/50' },
-                  { label: 'Cat', icon: '🐱', value: petYears.catYears, barClass: 'from-sky-400 to-sky-600', chip: 'bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-400 border-sky-200/70 dark:border-sky-800/50' },
-                ].map((row) => {
-                  const maxVal = Math.max(ageBreakdown.years, petYears.dogYears, petYears.catYears, 1);
-                  const widthPct = Math.max(4, (row.value / maxVal) * 100);
-                  return (
-                    <div key={row.label} className="flex items-center gap-3">
-                      <span className="w-14 flex-shrink-0 flex items-center gap-1.5 text-xs font-bold text-neutral-500 dark:text-neutral-400">
-                        <span aria-hidden="true">{row.icon}</span>
-                        {row.label}
-                      </span>
-                      <div className="flex-1 min-w-0 h-3 rounded-full bg-neutral-100 dark:bg-neutral-900/60 border border-neutral-200/60 dark:border-neutral-800 overflow-hidden">
-                        <div
-                          className={`relative h-full rounded-full bg-gradient-to-r ${row.barClass} motion-safe:transition-[width] motion-safe:duration-700 ease-out`}
-                          style={{ width: `${widthPct}%` }}
-                        >
-                          <span className="absolute inset-y-0 right-0 w-2 rounded-full bg-white/40" aria-hidden="true" />
-                        </div>
-                      </div>
-                      <span className={`flex-shrink-0 min-w-[2.5rem] text-center text-[11px] font-extrabold tabular-nums px-2 py-0.5 rounded-full border ${row.chip}`}>{row.value}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </ResultCard>
-          )}
-
           {/* LIFETIME ESTIMATES */}
           {lifetimeEstimates && (
             <ResultCard>
               <SectionHeader
                 icon={FiActivity}
                 title="Lifetime Estimates"
-                subtitle="Population-average estimates since birth."
-                tip="Population-average estimates based on published resting rates — not personal biometrics."
+                subtitle="Rough estimates since birth."
+                tip="Rough estimates based on typical adult resting values — not personal biometrics."
               />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <StatTile tone="rose" icon={FiHeart} value={formatWithCommas(lifetimeEstimates.estimatedHeartbeats)} label="Heartbeats" sub="estimated, since birth" />
@@ -2515,7 +2452,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
       {/* DISCLAIMER */}
       <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 space-y-3 mt-5">
         <p className="leading-normal">
-          <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This calculator provides general chronological information for informational and entertainment purposes only. Lifetime estimates (heartbeats, breaths, sleep) are population averages, not personal biometrics, and dog/cat-year equivalents are a playful comparison, not a biological or veterinary claim.
+          <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This calculator provides general chronological information for informational and entertainment purposes only. Lifetime estimates (heartbeats, breaths, sleep) are rough figures based on typical adult values, not personal biometrics.
         </p>
       </div>
 

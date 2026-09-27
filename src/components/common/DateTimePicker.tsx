@@ -28,10 +28,9 @@ export interface DateTimePickerProps {
   /** Controlled value. When `includeTime` is true, the time component of
    *  this Date IS the source of truth (the picker does not keep hidden
    *  internal time state) — pass a midnight Date to represent "no time set".
-   *  The time field can be set before a date is: if so, `onChange` fires
-   *  with today's date carrying the entered time, so callers shouldn't
-   *  assume a non-midnight time implies the person deliberately confirmed
-   *  today's date too. */
+   *  The time field can be set before a date is: if so, the time is held
+   *  inside the picker and `value` stays null (no date is invented) until a
+   *  date is chosen, at which point the time is applied to it. */
   value: Date | null;
   onChange: (date: Date | null) => void;
 
@@ -151,7 +150,12 @@ const formatEditableDate = (d: Date): string => {
   return DATE_FIELD_ORDER.map((k) => parts[k]).join('/');
 };
 
-const parseEditableDate = (raw: string): Date | null => {
+// Two-digit years: when a maxDate is supplied (e.g. a date-of-birth field
+// capped at today), pick the most recent century that doesn't land after
+// it — with maxDate = 2026, "26" -> 2026 but "46" -> 1946. Without a
+// maxDate (e.g. a free "as of" date) there's nothing to pivot on, so the
+// old fixed rule applies: 00-50 -> 2000s, 51-99 -> 1900s.
+const parseEditableDate = (raw: string, maxDate?: Date): Date | null => {
   const m = raw.trim().match(/^(\d{1,4})[\/\-.](\d{1,4})[\/\-.](\d{1,4})$/);
   if (!m) return null;
   const rawParts = [m[1], m[2], m[3]];
@@ -159,7 +163,14 @@ const parseEditableDate = (raw: string): Date | null => {
   DATE_FIELD_ORDER.forEach((key, i) => { values[key] = parseInt(rawParts[i], 10); });
   let { day, month, year } = values;
   const yearStr = rawParts[DATE_FIELD_ORDER.indexOf('year')];
-  if (yearStr.length <= 2) year = year <= 50 ? 2000 + year : 1900 + year;
+  if (yearStr.length <= 2) {
+    if (maxDate) {
+      const candidate = Math.floor(maxDate.getFullYear() / 100) * 100 + year;
+      year = candidate > maxDate.getFullYear() ? candidate - 100 : candidate;
+    } else {
+      year = year <= 50 ? 2000 + year : 1900 + year;
+    }
+  }
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const d = new Date(year, month - 1, day);
   // Guards against JS's date rollover (e.g. Feb 30 -> Mar 2), which would
@@ -291,6 +302,15 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const [timeFocused, setTimeFocused] = useState(false);
   const [timeInputText, setTimeInputText] = useState('');
   const [timeError, setTimeError] = useState<'format' | null>(null);
+  // A time entered while no date exists yet. It lives here, NOT in `value`:
+  // reporting it via onChange would have to invent a date (previously
+  // "today"), which made the parent think a date of birth was chosen.
+  // It is applied when a date is picked/typed, and dropped when the
+  // parent flips timeUnknown back to true (e.g. its own Clear button).
+  const [pendingTime, setPendingTime] = useState<{ h: number; m: number } | null>(null);
+  useEffect(() => {
+    if (timeUnknown === true) setPendingTime(null);
+  }, [timeUnknown]);
 
   const DATE_PANEL_WIDTH = 296;
   const TIME_PANEL_WIDTH = 264;
@@ -368,22 +388,49 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const month = viewDate.getMonth();
   const dayGrid = useMemo(() => buildDayGrid(year, month), [year, month]);
 
-  // The time field no longer waits on a date to exist — someone can set a
-  // time first. When that happens there's no real Date yet to carry the
-  // hour/minute onto, so we implicitly anchor it to today (midnight),
-  // exactly like selectDay() below already does in reverse (carrying an
-  // already-set time onto whatever day gets picked later).
-  const effectiveDateForTime = value ?? stripTime(new Date());
+  // The time field doesn't wait on a date: with no date yet, the entered
+  // time is held in `pendingTime` and `value` stays null (so the parent
+  // still sees "no date"). selectDay/commitDateText carry it onto whichever
+  // day gets chosen.
+  const currentHour = value ? value.getHours() : pendingTime ? pendingTime.h : 0;
+  const currentMinute = value ? value.getMinutes() : pendingTime ? pendingTime.m : 0;
+  const displayTime: Date | null = value ?? (pendingTime ? new Date(2000, 0, 1, pendingTime.h, pendingTime.m) : null);
 
-  const selectDay = (d: Date) => {
-    if (!isDayInRange(d, minDate, maxDate)) return;
+  const withCarriedTime = (d: Date): Date => {
     const next = new Date(d);
-    if (includeTime && value) {
-      next.setHours(value.getHours(), value.getMinutes(), 0, 0);
+    if (includeTime && (value || pendingTime)) {
+      next.setHours(currentHour, currentMinute, 0, 0);
     } else {
       next.setHours(0, 0, 0, 0);
     }
+    return next;
+  };
+
+  const commitTime = (hour24: number, minute: number) => {
+    if (value) {
+      const next = new Date(value);
+      next.setHours(hour24, minute, 0, 0);
+      onChange(next);
+    } else {
+      setPendingTime({ h: hour24, m: minute });
+    }
+    onTimeUnknownChange?.(false);
+  };
+
+  // Clearing the date keeps a known time as pending, so the time field
+  // and the parent's timeUnknown flag stay consistent.
+  const clearDate = () => {
+    if (includeTime && value && !timeUnknown) {
+      setPendingTime({ h: value.getHours(), m: value.getMinutes() });
+    }
+    onChange(null);
+  };
+
+  const selectDay = (d: Date) => {
+    if (!isDayInRange(d, minDate, maxDate)) return;
+    const next = withCarriedTime(d);
     onChange(next);
+    setPendingTime(null);
     // Time now lives in its own field, so the date popover always closes
     // once a day is picked (previously stayed open when includeTime so the
     // time wheels — then inside the same panel — remained reachable).
@@ -391,26 +438,17 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   };
 
   const setHour12 = (h: number) => {
-    const { period } = to12Hour(effectiveDateForTime.getHours());
-    const next = new Date(effectiveDateForTime);
-    next.setHours(to24Hour(h, period), effectiveDateForTime.getMinutes(), 0, 0);
-    onChange(next);
-    onTimeUnknownChange?.(false);
+    const { period } = to12Hour(currentHour);
+    commitTime(to24Hour(h, period), currentMinute);
   };
 
   const setMinute = (m: number) => {
-    const next = new Date(effectiveDateForTime);
-    next.setMinutes(m, 0, 0);
-    onChange(next);
-    onTimeUnknownChange?.(false);
+    commitTime(currentHour, m);
   };
 
   const setPeriod = (p: 'AM' | 'PM') => {
-    const { hour12 } = to12Hour(effectiveDateForTime.getHours());
-    const next = new Date(effectiveDateForTime);
-    next.setHours(to24Hour(hour12, p), effectiveDateForTime.getMinutes(), 0, 0);
-    onChange(next);
-    onTimeUnknownChange?.(false);
+    const { hour12 } = to12Hour(currentHour);
+    commitTime(to24Hour(hour12, p), currentMinute);
   };
 
   // Resets the time-of-day back to midnight and marks it unknown again —
@@ -418,10 +456,12 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   // the time field. Lives in the panel footer, mirroring the date panel's
   // own Clear button.
   const clearTime = () => {
-    if (!value) return;
-    const next = new Date(value);
-    next.setHours(0, 0, 0, 0);
-    onChange(next);
+    if (value) {
+      const next = new Date(value);
+      next.setHours(0, 0, 0, 0);
+      onChange(next);
+    }
+    setPendingTime(null);
     onTimeUnknownChange?.(true);
     setTimeInputText('');
     setTimeError(null);
@@ -433,22 +473,18 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const commitDateText = () => {
     const text = dateInputText.trim();
     if (text === '') {
-      onChange(null);
+      clearDate();
       setDateError(null);
     } else {
-      const parsed = parseEditableDate(text);
+      const parsed = parseEditableDate(text, maxDate);
       if (!parsed) {
         setDateError('format');
       } else if (!isDayInRange(parsed, minDate, maxDate)) {
         setDateError('range');
       } else {
-        const next = new Date(parsed);
-        if (includeTime && value) {
-          next.setHours(value.getHours(), value.getMinutes(), 0, 0);
-        } else {
-          next.setHours(0, 0, 0, 0);
-        }
+        const next = withCarriedTime(parsed);
         onChange(next);
+        setPendingTime(null);
         setViewDate(stripTime(next));
         setDateError(null);
       }
@@ -457,10 +493,9 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   };
 
   // Commits typed time text ("3:45 PM" or "15:45"). Works even if no date
-  // has been picked yet — in that case the committed value is implicitly
-  // anchored to today (see effectiveDateForTime above), the same way
-  // picking a date after a time was already typed carries that time
-  // over (selectDay). Emptying the field and blurring is how a person
+  // has been picked yet — in that case the time is held as pendingTime
+  // (see commitTime above) and applied when a date is chosen (selectDay /
+  // commitDateText). Emptying the field and blurring is how a person
   // marks the time "unknown" again — there's no separate checkbox for
   // that anymore, so this is the only path back to the unknown state
   // besides the panel's own Clear button, and it only applies once a
@@ -468,11 +503,8 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const commitTimeText = () => {
     const text = timeInputText.trim();
     if (text === '') {
-      if (value && !timeUnknown) {
-        const next = new Date(value);
-        next.setHours(0, 0, 0, 0);
-        onChange(next);
-        onTimeUnknownChange?.(true);
+      if ((value || pendingTime) && !timeUnknown) {
+        clearTime();
       }
       setTimeError(null);
     } else {
@@ -480,10 +512,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
       if (!parsed) {
         setTimeError('format');
       } else {
-        const next = new Date(effectiveDateForTime);
-        next.setHours(parsed.hour24, parsed.minute, 0, 0);
-        onChange(next);
-        onTimeUnknownChange?.(false);
+        commitTime(parsed.hour24, parsed.minute);
         setTimeError(null);
       }
     }
@@ -512,16 +541,16 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const dateDisplayValue = (dateFocused || dateError) ? dateInputText : (value ? formatTriggerDate(value) : '');
   const timeDisplayValue = (timeFocused || timeError)
     ? timeInputText
-    : !value
+    : !displayTime
       ? ''
       : timeUnknown
         ? ''
-        : formatTriggerTime(value);
+        : formatTriggerTime(displayTime);
   const datePlaceholder = dateFocused && !dateInputText ? DATE_FORMAT_HINT : placeholder;
   const timePlaceholder = 'h:mm AM/PM';
 
-  const { hour12: selHour12, period: selPeriod } = value ? to12Hour(value.getHours()) : { hour12: 12, period: 'AM' as const };
-  const selMinute = value ? value.getMinutes() : 0;
+  const { hour12: selHour12, period: selPeriod } = to12Hour(currentHour);
+  const selMinute = currentMinute;
 
   return (
     <div ref={wrapperRef} className="relative w-full">
@@ -530,9 +559,18 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
           each with its own icon, caption, and picker popover. */}
       <div className="flex items-stretch gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
-          <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-            {dateLabel}
-          </span>
+          {/* Guarded so an explicitly-empty dateLabel (a consumer that
+              already shows its own external label, e.g. "Date of Birth" in
+              BirthdayCalculator.tsx, and doesn't want this "Date" caption
+              duplicating it) collapses the caption and its mb-2 spacing
+              entirely, rather than leaving an empty span behind. The
+              default 'Date' still renders as before for every other
+              caller that doesn't pass dateLabel. */}
+          {dateLabel && (
+            <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+              {dateLabel}
+            </span>
+          )}
           <div className={`flex items-stretch w-full rounded-xl border shadow-sm overflow-hidden transition-colors duration-150 bg-neutral-50 dark:bg-neutral-900/40 ${
             error || dateError
               ? 'border-red-300 dark:border-red-500/60'
@@ -662,7 +700,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   // popover (from either icon) rather than leaving it
                   // hanging open behind the field.
                   if (openPanel !== null) setOpenPanel(null);
-                  if (!timeError) setTimeInputText(value && !timeUnknown ? formatTriggerTime(value) : '');
+                  if (!timeError) setTimeInputText(displayTime && !timeUnknown ? formatTriggerTime(displayTime) : '');
                   setTimeFocused(true);
                 }}
                 onChange={(e) => {
@@ -685,7 +723,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                 onBlur={commitTimeText}
                 onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 className={`w-full bg-transparent pl-10 pr-3 py-3 font-semibold text-left focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
-                  value && !timeUnknown && !timeError ? 'text-neutral-900 dark:text-white' : 'text-neutral-400 dark:text-neutral-500 font-medium'
+                  displayTime && !timeUnknown && !timeError ? 'text-neutral-900 dark:text-white' : 'text-neutral-400 dark:text-neutral-500 font-medium'
                 }`}
               />
             </div>
@@ -701,7 +739,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                 if (openPanel === 'time') {
                   setOpenPanel(null);
                 } else {
-                  if (!timeError) setTimeInputText(value && !timeUnknown ? formatTriggerTime(value) : '');
+                  if (!timeError) setTimeInputText(displayTime && !timeUnknown ? formatTriggerTime(displayTime) : '');
                   setOpenPanel('time');
                 }
               }}
@@ -878,7 +916,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                 <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-t border-neutral-100 dark:border-neutral-700/60 bg-neutral-50/60 dark:bg-neutral-900/30">
                   <button
                     type="button"
-                    onClick={() => { onChange(null); setOpenPanel(null); }}
+                    onClick={() => { clearDate(); setOpenPanel(null); }}
                     className="text-xs font-bold text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer inline-flex items-center gap-1"
                   >
                     <SafeIcon icon={FiX} className="w-3 h-3" />
@@ -900,11 +938,9 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
               <>
                 <div className="px-3 pt-3 pb-3">
                   {/* Wheels are always usable now, even with no date set
-                      yet — selHour12/selMinute/selPeriod already fall
-                      back to a 12:00 AM display in that case, matching
-                      effectiveDateForTime's implicit midnight-today
-                      anchor above, so there's nothing to special-case
-                      here. */}
+                      yet — selHour12/selMinute/selPeriod read from
+                      currentHour/currentMinute, which fall back to
+                      pendingTime and then to 12:00 AM. */}
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <span className="block text-[10px] font-bold uppercase tracking-wide text-neutral-400 dark:text-neutral-500 mb-1 text-center">
@@ -961,7 +997,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   <button
                     type="button"
                     onClick={clearTime}
-                    disabled={!value || timeUnknown}
+                    disabled={(!value && !pendingTime) || timeUnknown}
                     className="text-xs font-bold text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer inline-flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-neutral-400 dark:disabled:hover:text-neutral-500"
                   >
                     <SafeIcon icon={FiX} className="w-3 h-3" />

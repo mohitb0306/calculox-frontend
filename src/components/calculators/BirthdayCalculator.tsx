@@ -15,6 +15,7 @@ import {
   getUpcomingBirthdays,
   getDayOfYearBorn,
   validateBirthdayInput,
+  calculateCurrentAge,
   formatWithCommas,
   isFeb29Birthday,
   getWesternZodiac,
@@ -44,7 +45,7 @@ const {
   FiCalendar, FiGift, FiAlertCircle, FiInfo, FiArrowDown,
   FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiStar,
   FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload,
-  FiImage, FiSunrise, FiFlag, FiTrendingUp,
+  FiImage, FiSunrise, FiFlag, FiTrendingUp, FiClock,
   FiMoon, FiCompass, FiDroplet, FiLayers, FiHexagon,
 } = FiIcons;
 
@@ -574,9 +575,10 @@ interface NextBirthdayHeroProps {
   breakdown: CountdownBreakdown;
   progressPercent: number;
   isLeapBirthday?: boolean;
+  currentAge: { years: number; months: number; days: number } | null;
 }
 
-const NextBirthdayHero: React.FC<NextBirthdayHeroProps> = ({ nextBirthday, breakdown, progressPercent, isLeapBirthday = false }) => {
+const NextBirthdayHero: React.FC<NextBirthdayHeroProps> = ({ nextBirthday, breakdown, progressPercent, isLeapBirthday = false, currentAge }) => {
   const reduced = useReducedMotion();
   const { date, daysUntil, dayOfWeek, turningAge, isToday } = nextBirthday;
   const pct = Math.max(0, Math.min(100, progressPercent));
@@ -607,7 +609,7 @@ const NextBirthdayHero: React.FC<NextBirthdayHeroProps> = ({ nextBirthday, break
 
   return (
     <div
-      className="relative overflow-hidden rounded-3xl border border-rose-300/25 shadow-[0_16px_48px_-16px_rgba(159,18,57,0.75)] p-4 sm:p-6"
+      className="relative overflow-hidden rounded-3xl border border-rose-300/25 shadow-[0_16px_48px_-16px_rgba(159,18,57,0.75)]"
       style={{ background: 'linear-gradient(135deg, #881337 0%, #be123c 55%, #b45309 100%)' }}
     >
       {/* WRAPPING-PAPER TEXTURE — faint diagonal stripe, purely decorative */}
@@ -646,7 +648,52 @@ const NextBirthdayHero: React.FC<NextBirthdayHeroProps> = ({ nextBirthday, break
       )}
       <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10" aria-hidden="true" />
 
-      <div className="relative flex flex-col gap-4 sm:gap-5">
+      {/* CURRENT AGE RIBBON — a full-bleed banner flush against the card's
+          top edge (outside the padding everything else below sits in), so
+          it reads as its own attention-grabbing header rather than a
+          quiet subtitle tucked under "Next Birthday." Built as a foil/
+          metallic gold sash (deep gradient + glass sheen + a slow shine
+          sweep + a cast shadow onto the card below), the same layered
+          "premium medallion" treatment as the Golden Birthday hero, rather
+          than a flat tinted bar — needs `relative` (like the content
+          wrapper below) so it paints above the decorative absolute layers
+          above instead of getting washed out under them. */}
+      {currentAge && (
+        <motion.div
+          className="relative overflow-hidden flex items-center justify-center sm:justify-start gap-2 px-4 sm:px-6 py-2.5 sm:py-3 shadow-[0_6px_18px_-6px_rgba(120,53,15,0.6)]"
+          style={{ background: 'linear-gradient(135deg, #fef9c3 0%, #fde047 45%, #f59e0b 100%)' }}
+          {...enter(0)}
+        >
+          {/* glossy top sheen, same glass-highlight the Golden Birthday
+              medallion uses, so this reads as foil rather than flat paint */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/50 to-transparent" aria-hidden="true" />
+          {/* slow diagonal shine sweep, the same "premium badge" cue as a
+              metallic card or foil sticker — paused between passes rather
+              than constantly shimmering, so it reads as a flourish */}
+          {!reduced && (
+            <motion.div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 w-1/3 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/50 to-transparent"
+              animate={{ left: ['-45%', '145%'] }}
+              transition={{ duration: 2.6, repeat: Infinity, repeatDelay: 2.8, ease: 'easeInOut' }}
+            />
+          )}
+          <span className="relative flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-amber-700 to-amber-900 flex items-center justify-center shadow-sm shadow-amber-950/40 ring-1 ring-white/40">
+            <SafeIcon icon={FiClock} className="w-3 h-3 text-amber-100" />
+          </span>
+          <p className="relative min-w-0 text-xs sm:text-[13px] font-bold text-amber-950 tracking-tight [text-shadow:0_1px_0_rgba(255,255,255,0.35)]">
+            You are{' '}
+            <span className="text-sm sm:text-base font-extrabold tabular-nums">{currentAge.years}</span>{' '}
+            {plural(currentAge.years, 'year', 'years')},{' '}
+            <span className="text-sm sm:text-base font-extrabold tabular-nums">{currentAge.months}</span>{' '}
+            {plural(currentAge.months, 'month', 'months')}, and{' '}
+            <span className="text-sm sm:text-base font-extrabold tabular-nums">{currentAge.days}</span>{' '}
+            {plural(currentAge.days, 'day', 'days')} old.
+          </p>
+        </motion.div>
+      )}
+
+      <div className="relative flex flex-col gap-4 sm:gap-5 p-4 sm:p-6">
         {/* 1 · HEADER */}
         <motion.div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2" {...enter(0.05)}>
           <div className="flex items-center gap-2">
@@ -862,6 +909,16 @@ interface GoldenTimelineItem {
   chipClass: string;
   pulse: string;
   pulseFade: string;
+  // --- hero-only fields ---
+  // Used only by GoldenBirthdayCard's headline medallion, for whichever of
+  // the three items is currently "active" (see activeItem below) — the
+  // row-list rendering above doesn't touch these.
+  badgeLabel: string;
+  subtitle: string;
+  tip: string;
+  footerCaption: string;
+  headerAccentClass: string;
+  calendarIconClass: string;
 }
 
 const GoldenMilestoneTimeline: React.FC<{ items: GoldenTimelineItem[] }> = ({ items }) => {
@@ -974,77 +1031,112 @@ const GoldenBirthdayCard: React.FC<GoldenBirthdayCardProps> = ({ golden: info, d
       age: info.goldenDay, date: info.date, achieved: info.achieved, isToday: info.isToday, daysAway: info.daysAway,
       hexFrom: GOLD.from, hexTo: GOLD.to, chipClass: GOLD.chip,
       pulse: 'rgba(217,119,6,0.45)', pulseFade: 'rgba(217,119,6,0)',
+      badgeLabel: 'Golden Age',
+      subtitle: 'The birthday where your new age matches the day of the month you were born.',
+      tip: 'Also called a champagne or lucky birthday \u2014 a popular tradition, not an official or legally defined milestone.',
+      footerCaption: `Turning ${info.goldenDay} on the ${ordinal(info.goldenDay)} of the month.`,
+      headerAccentClass: 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-amber-500/30',
+      calendarIconClass: 'text-amber-500 dark:text-amber-400',
     },
     {
       key: 'double', title: 'Double Golden Birthday', hint: 'Age = birth day \u00d7 2',
       age: doubleGolden.doubleGoldenAge, date: doubleGolden.date, achieved: doubleGolden.achieved, isToday: doubleGolden.isToday, daysAway: doubleGolden.daysAway,
       hexFrom: ACCENT.hex, hexTo: '#9f1239', chipClass: `${ACCENT.bgLight} ${ACCENT.text}`,
       pulse: 'rgba(225,29,72,0.45)', pulseFade: 'rgba(225,29,72,0)',
+      badgeLabel: 'Double Golden Age',
+      subtitle: 'The birthday where your new age is exactly double the day of the month you were born.',
+      tip: 'An informal internet tradition riffing on the Golden Birthday idea \u2014 not an official or legally defined milestone.',
+      footerCaption: `Turning ${doubleGolden.doubleGoldenAge}, double your birth day (the ${ordinal(info.goldenDay)}).`,
+      headerAccentClass: 'bg-gradient-to-br from-rose-400 to-rose-600 shadow-rose-500/30',
+      calendarIconClass: 'text-rose-500 dark:text-rose-400',
     },
     ...(platinum.sameAsGolden ? [] : [{
       key: 'platinum', title: 'Platinum Birthday', hint: 'Age = birth day, digits reversed',
       age: platinum.platinumAge, date: platinum.date, achieved: platinum.achieved, isToday: platinum.isToday, daysAway: platinum.daysAway,
       hexFrom: PLATINUM.from, hexTo: PLATINUM.to, chipClass: PLATINUM.chip,
       pulse: 'rgba(100,116,139,0.45)', pulseFade: 'rgba(100,116,139,0)',
+      badgeLabel: 'Platinum Age',
+      subtitle: 'The birthday where your new age matches your birth day, with its digits reversed.',
+      tip: 'An informal internet tradition riffing on the Golden Birthday idea \u2014 not an official or legally defined milestone.',
+      footerCaption: `Turning ${platinum.platinumAge}, the digits of the ${ordinal(info.goldenDay)} reversed.`,
+      headerAccentClass: 'bg-gradient-to-br from-slate-400 to-slate-600 shadow-slate-500/30',
+      calendarIconClass: 'text-slate-500 dark:text-slate-400',
     }]),
   ];
+
+  // --- ACTIVE MILESTONE ---
+  // Whichever of the three the headline medallion (and header title/
+  // subtitle/colors) should represent right now: the soonest one not yet
+  // reached, chronologically — same sort + "first unreached" rule
+  // GoldenMilestoneTimeline uses for its own "Next up" row below, so the
+  // two always agree. Golden Birthday happens young (age = day of month),
+  // so for most adults it's long since reached; without this, the hero
+  // would keep showing a stale, already-passed milestone instead of
+  // whichever of Platinum/Double Golden is genuinely next. If all three
+  // are already reached, falls back to the last one reached (chronologically
+  // last) rather than defaulting back to Golden.
+  const sortedForActive = [...timelineItems].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const activeNextIndex = sortedForActive.findIndex((it) => !it.achieved);
+  const activeItem = activeNextIndex === -1 ? sortedForActive[sortedForActive.length - 1] : sortedForActive[activeNextIndex];
 
   return (
     <ResultCard>
       <SectionHeader
         icon={FiStar}
-        title="Golden Birthday"
-        subtitle="The birthday where your new age matches the day of the month you were born."
-        tip="Also called a champagne or lucky birthday — a popular tradition, not an official or legally defined milestone."
+        title={activeItem.title}
+        subtitle={activeItem.subtitle}
+        tip={activeItem.tip}
         badge={<CountBadge achieved={milestoneAchieved} total={milestoneTotal} />}
-        accentClassName="bg-gradient-to-br from-amber-400 to-amber-600 shadow-amber-500/30"
+        accentClassName={activeItem.headerAccentClass}
       />
 
       {/* HEADLINE — glassy gradient medallion, pulsing while still ahead;
           the same treatment other cards use for their single hero stat,
           scaled down to sit inside a shared ResultCard rather than take a
-          full-width band of its own. */}
+          full-width band of its own. Always reflects activeItem above, so
+          this switches between Golden/Double Golden/Platinum's own date,
+          age and color rather than staying fixed on Golden. */}
       <div className="rounded-2xl bg-gradient-to-br from-amber-50/80 to-rose-50/50 dark:from-amber-900/10 dark:to-rose-900/10 border border-amber-200/60 dark:border-amber-800/40 p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
           <div className="relative flex-shrink-0 mx-auto sm:mx-0">
-            {!info.achieved && (
+            {!activeItem.achieved && (
               <motion.span
                 aria-hidden="true"
                 className="absolute inset-0 rounded-full"
-                animate={!reduced ? { boxShadow: ['0 0 0 0 rgba(217,119,6,0.35)', '0 0 0 14px rgba(217,119,6,0)'] } : undefined}
+                animate={!reduced ? { boxShadow: [`0 0 0 0 ${activeItem.pulse}`, `0 0 0 14px ${activeItem.pulseFade}`] } : undefined}
                 transition={!reduced ? { duration: 2, repeat: Infinity, ease: 'easeOut' } : undefined}
               />
             )}
             <div
               className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full flex flex-col items-center justify-center text-white overflow-hidden ring-4 ring-white/60 dark:ring-neutral-900/50"
-              style={{ background: `linear-gradient(135deg, ${GOLD.from} 0%, ${GOLD.to} 100%)`, boxShadow: '0 14px 30px -10px rgba(217,119,6,0.55)' }}
+              style={{ background: `linear-gradient(135deg, ${activeItem.hexFrom} 0%, ${activeItem.hexTo} 100%)`, boxShadow: `0 14px 30px -10px ${activeItem.pulse}` }}
             >
               {/* faint watermark star + glassy top sheen, purely decorative */}
               <SafeIcon icon={FiStar} aria-hidden="true" className="pointer-events-none absolute -bottom-3 -right-2 w-14 h-14 text-white/15" />
               <div className="pointer-events-none absolute inset-x-2 top-1 h-1/2 rounded-full bg-white/15 blur-md" aria-hidden="true" />
-              <span className="relative text-3xl sm:text-4xl font-extrabold leading-none tabular-nums drop-shadow-sm">{info.goldenDay}</span>
-              <span className="relative text-[10px] font-bold uppercase tracking-wider mt-1">Golden Age</span>
+              <span className="relative text-3xl sm:text-4xl font-extrabold leading-none tabular-nums drop-shadow-sm">{activeItem.age}</span>
+              <span className="relative text-[10px] font-bold uppercase tracking-wider mt-1">{activeItem.badgeLabel}</span>
             </div>
           </div>
           <div className="min-w-0 text-center sm:text-left">
-            {info.achieved ? (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${GOLD.chip}`}>
+            {activeItem.achieved ? (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${activeItem.chipClass}`}>
                 <SafeIcon icon={FiCheckCircle} className="w-3 h-3" /> Already reached
               </span>
             ) : (
               <NextChip
-                label={info.isToday ? 'Today! 🎉' : formatAway(info.daysAway)}
-                className={`text-xs font-bold px-2.5 py-1 rounded-full ${GOLD.chip}`}
-                pulse="rgba(217,119,6,0.45)"
-                pulseFade="rgba(217,119,6,0)"
+                label={activeItem.isToday ? 'Today! 🎉' : formatAway(activeItem.daysAway)}
+                className={`text-xs font-bold px-2.5 py-1 rounded-full ${activeItem.chipClass}`}
+                pulse={activeItem.pulse}
+                pulseFade={activeItem.pulseFade}
               />
             )}
             <p className="mt-2.5 flex items-center justify-center sm:justify-start gap-1.5 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-              <SafeIcon icon={FiCalendar} className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 flex-shrink-0" />
-              {formatFullDate(info.date)}
+              <SafeIcon icon={FiCalendar} className={`w-3.5 h-3.5 flex-shrink-0 ${activeItem.calendarIconClass}`} />
+              {formatFullDate(activeItem.date)}
             </p>
             <p className="mt-1 text-xs font-medium text-neutral-500 dark:text-neutral-400">
-              Turning {info.goldenDay} on the {ordinal(info.goldenDay)} of the month.
+              {activeItem.footerCaption}
             </p>
           </div>
         </div>
@@ -1826,6 +1918,11 @@ const BirthdayCalculator: React.FC<BirthdayCalculatorProps> = ({
     return Math.round(Math.max(0, Math.min(100, ((span - nextBirthday.daysUntil) / span) * 100)));
   }, [nextBirthday]);
 
+  const currentAge = useMemo(() => {
+    if (!committedBirthDate || !effectiveAsOf) return null;
+    return calculateCurrentAge(committedBirthDate, effectiveAsOf);
+  }, [committedBirthDate, effectiveAsOf]);
+
   const golden = useMemo(() => {
     if (!committedBirthDate || !effectiveAsOf) return null;
     return getGoldenBirthday(committedBirthDate, effectiveAsOf);
@@ -2152,6 +2249,7 @@ const BirthdayCalculator: React.FC<BirthdayCalculatorProps> = ({
             breakdown={countdown}
             progressPercent={yearProgressPercent}
             isLeapBirthday={isLeapBirthday}
+            currentAge={currentAge}
           />
 
           <GoldenBirthdayCard golden={golden} doubleGolden={doubleGolden} platinum={platinum} />

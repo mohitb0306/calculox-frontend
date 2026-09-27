@@ -1492,7 +1492,8 @@ const GENERATION_DETAILS: Record<string, string> = {
   'Generation X': "Grew up amid rising divorce rates and dual-income households, which is often credited with making Gen X independent, self-reliant, and skeptical of institutions. Sometimes called the \u201cforgotten middle child\u201d generation, sandwiched between two much larger cohorts.",
   'Millennials': "Came of age around the turn of the millennium, shaped early by the rise of the internet and, later, social media and smartphones. Millennials also entered adulthood during the Great Recession, which is often cited as shaping their attitudes toward work and financial security.",
   'Generation Z': "The first generation of true digital natives, raised alongside smartphones, streaming, and always-on connectivity from early childhood. Gen Z is often associated with strong comfort around technology and a heightened awareness of social and environmental issues.",
-  'Generation Alpha': "The newest named cohort, growing up entirely within the era of AI, tablets, and ubiquitous screens \u2014 the first generation with no memory of a world before smartphones. Researchers haven't yet settled on a firm end year for this generation.",
+  'Generation Alpha': "Grew up entirely within the era of AI, tablets, and ubiquitous screens \u2014 the first generation with no memory of a world before smartphones. Largely the children of Millennials.",
+  'Generation Beta': "The newest named cohort, born into a world where AI and automation are already deeply woven into everyday life. Largely the children of younger Millennials and older Generation Z, and expected to make up a significant share of the global population by the mid-2030s.",
 };
 
 const LIFE_PATH_DETAILS: Record<number, { keywords: string[]; blurb: string }> = {

@@ -779,7 +779,19 @@ const slowScrollToElement = (element: HTMLElement, duration = 1800, topOffset = 
   const step = (now: number) => {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    window.scrollTo(0, startY + distance * easeInOutCubic(progress));
+    // Explicit `behavior: 'auto'` (object form) instead of the old
+    // `window.scrollTo(0, y)` two-argument call. That form silently
+    // inherits whatever `scroll-behavior` is set on the page (a global
+    // `scroll-smooth` on <html> is common, e.g. for anchor-link nav).
+    // When that's active, every one of these ~100+ per-frame calls was
+    // separately kicking off the browser's *own* native smooth-scroll
+    // interpolation on top of our manual easing — two competing
+    // animations fighting over scroll position every 16ms, which is
+    // exactly what reads as stutter/glitch rather than one smooth motion.
+    // Forcing 'auto' here makes each step an instant jump to the
+    // pre-eased position, so this rAF loop is the only thing animating
+    // the scroll.
+    window.scrollTo({ top: startY + distance * easeInOutCubic(progress), left: 0, behavior: 'auto' });
     if (progress < 1) window.requestAnimationFrame(step);
   };
   window.requestAnimationFrame(step);
@@ -1754,11 +1766,30 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
   // Only ticks when the result is "as of today" — an "as of" a fixed past
   // or future date is, by definition, static, so ticking it would be
   // misleading rather than premium.
+  //
+  // The first tick is deliberately delayed rather than starting on an
+  // immediate 1000ms interval. Calculate kicks off an ~1800ms eased scroll
+  // (see slowScrollToElement below) to bring the freshly-mounted results
+  // into view; an interval starting at the same instant landed its first
+  // firing right in the middle of that scroll, and the resulting
+  // re-render competed with the manual rAF scroll loop for the main
+  // thread — that collision is what showed up as a stutter/glitch while
+  // scrolling. Waiting until just after the scroll settles keeps the two
+  // out of each other's way; a normal 1-second interval takes over after
+  // that.
   const [liveNow, setLiveNow] = useState<Date>(() => new Date());
   useEffect(() => {
     if (!hasCalculated || committedAsOfMode !== 'today') return;
-    const id = window.setInterval(() => setLiveNow(new Date()), 1000);
-    return () => window.clearInterval(id);
+    const FIRST_TICK_DELAY_MS = 2000; // comfortably past the 1800ms scroll
+    let intervalId: number | null = null;
+    const startDelayId = window.setTimeout(() => {
+      setLiveNow(new Date());
+      intervalId = window.setInterval(() => setLiveNow(new Date()), 1000);
+    }, FIRST_TICK_DELAY_MS);
+    return () => {
+      window.clearTimeout(startDelayId);
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
   }, [hasCalculated, committedAsOfMode]);
 
   useEffect(() => {
@@ -1856,6 +1887,41 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
     return committedAsOfMode === 'today' ? liveNow : committedAsOfDate;
   }, [hasCalculated, committedAsOfDate, committedAsOfMode, liveNow]);
 
+  // --- DAY-LEVEL "AS OF" ---
+  // Next Birthday, Milestone Birthdays, Day-Count Milestones and the
+  // weekday tally only ever change at calendar-day granularity — none of
+  // them read a time-of-day. But because they all previously took
+  // `effectiveAsOf` directly, the 1-second live tick forced every one of
+  // them (including the weekday tally's per-birthday-year loop) to
+  // recompute, and this whole subtree to re-render, once a second — far
+  // more work than any of those sections actually need, and one of the
+  // things competing with the post-Calculate scroll animation above.
+  //
+  // This mirrors `effectiveAsOf` but only takes on a new identity when the
+  // local calendar day actually changes, using the ref-during-render
+  // pattern React recommends for deriving a value from the previous
+  // render without an extra effect/render pass. `ageBreakdown` (which
+  // does need live seconds, for the headline's ticking counter) and
+  // NextBirthdayCard's own live D/H/M/S countdown keep reading the true
+  // live `effectiveAsOf` above — nothing about the seconds-accurate parts
+  // of the page changes.
+  //
+  // Trade-off worth knowing about: a Day-Count Milestone whose exact
+  // achieved-moment falls partway through a day (rather than at local
+  // midnight, since it inherits the actual time of birth) may keep
+  // showing as "not yet reached" until the next local-midnight refresh
+  // instead of flipping the instant it's crossed. For a decorative status
+  // badge on a multi-thousand-day milestone, that's an acceptable trade
+  // for not re-rendering the whole results tree every second.
+  const dayKeyRef = useRef<number | null>(null);
+  const dayValueRef = useRef<Date | null>(null);
+  const currentDayKey = effectiveAsOf ? startOfDayMs(effectiveAsOf) : null;
+  if (currentDayKey !== dayKeyRef.current) {
+    dayKeyRef.current = currentDayKey;
+    dayValueRef.current = effectiveAsOf;
+  }
+  const effectiveAsOfDay = dayValueRef.current;
+
   const ageBreakdown = useMemo(() => {
     if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOf) return null;
     return calculateAge(committedBirthDate, effectiveAsOf);
@@ -1873,21 +1939,21 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
   }, [hasCalculated, hasError, committedBirthTimeUnknown, committedAsOfMode, committedAsOfTimeUnknown]);
 
   const nextBirthday = useMemo(() => {
-    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOf) return null;
-    return getNextBirthday(committedBirthDate, effectiveAsOf);
-  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOf]);
+    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOfDay) return null;
+    return getNextBirthday(committedBirthDate, effectiveAsOfDay);
+  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOfDay]);
 
   const milestones = useMemo(() => {
-    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOf) return [];
-    return getMilestoneBirthdays(committedBirthDate, effectiveAsOf);
-  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOf]);
+    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOfDay) return [];
+    return getMilestoneBirthdays(committedBirthDate, effectiveAsOfDay);
+  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOfDay]);
 
   const nextMilestone = useMemo(() => getNextMilestone(milestones), [milestones]);
 
   const dayMilestones = useMemo(() => {
-    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOf) return [];
-    return getDayCountMilestones(committedBirthDate, effectiveAsOf);
-  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOf]);
+    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOfDay) return [];
+    return getDayCountMilestones(committedBirthDate, effectiveAsOfDay);
+  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOfDay]);
 
   const lifetimeEstimates = useMemo(() => {
     if (!ageBreakdown) return null;
@@ -1895,9 +1961,9 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
   }, [ageBreakdown]);
 
   const weekdayTally = useMemo(() => {
-    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOf) return [];
-    return getBirthdayWeekdayTally(committedBirthDate, effectiveAsOf);
-  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOf]);
+    if (!hasCalculated || hasError || !committedBirthDate || !effectiveAsOfDay) return [];
+    return getBirthdayWeekdayTally(committedBirthDate, effectiveAsOfDay);
+  }, [hasCalculated, hasError, committedBirthDate, effectiveAsOfDay]);
 
   // Anchored on the upcoming birthday (not the current calendar year's, which
   // may already have passed): "your next birthday is a Saturday — the next
@@ -1951,7 +2017,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
 
   // --- SHAREABLE REPORT ---
   const report = useMemo<ShareableReport | null>(() => {
-    if (!hasCalculated || hasError || !ageBreakdown || !committedBirthDate || !effectiveAsOf) return null;
+    if (!hasCalculated || hasError || !ageBreakdown || !committedBirthDate || !effectiveAsOfDay) return null;
 
     const mainRows: Array<{ label: string; value: string }> = [
       { label: 'Total Days Alive', value: formatWithCommas(ageBreakdown.totalDays) },
@@ -1976,7 +2042,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
       sections.push({
         heading: 'Next Milestone Birthday',
         rows: [
-          { label: nextMilestone.label, value: `${formatShortDate(nextMilestone.date)} (${formatAwayPlain(calendarDaysAway(nextMilestone.date, effectiveAsOf))})` },
+          { label: nextMilestone.label, value: `${formatShortDate(nextMilestone.date)} (${formatAwayPlain(calendarDaysAway(nextMilestone.date, effectiveAsOfDay))})` },
         ],
         variant: 'output',
       });
@@ -1989,7 +2055,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
           ? formatFullDate(committedBirthDate)
           : `${formatFullDate(committedBirthDate)} at ${formatTime(committedBirthDate)}`,
       },
-      { label: 'Calculated As Of', value: formatFullDate(effectiveAsOf) },
+      { label: 'Calculated As Of', value: formatFullDate(effectiveAsOfDay) },
     ];
     const pdfOnlySections: ShareableReport['sections'] = [{ heading: 'Your Inputs', rows: inputRows, variant: 'input' }];
 
@@ -1998,7 +2064,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
       headlineValue: `${ageBreakdown.years}`,
       headlineLabel: `years, ${ageBreakdown.months} months, ${ageBreakdown.days} days`,
       accentColor: ACCENT.hex,
-      meta: [committedAsOfMode === 'today' ? 'As of Today' : `As of ${formatShortDate(effectiveAsOf)}`],
+      meta: [committedAsOfMode === 'today' ? 'As of Today' : `As of ${formatShortDate(effectiveAsOfDay)}`],
       sections,
       pdfOnlySections,
       imageSections: sections,
@@ -2007,7 +2073,7 @@ const ChronologicalAgeCalculator: React.FC<ChronologicalAgeCalculatorProps> = ({
         : 'For informational purposes only.',
       fileNameBase: `chronological-age-${ageBreakdown.years}`,
     };
-  }, [hasCalculated, hasError, ageBreakdown, committedBirthDate, committedBirthTimeUnknown, effectiveAsOf, nextBirthday, nextMilestone, committedAsOfMode, isApproximate]);
+  }, [hasCalculated, hasError, ageBreakdown, committedBirthDate, committedBirthTimeUnknown, effectiveAsOfDay, nextBirthday, nextMilestone, committedAsOfMode, isApproximate]);
 
   useEffect(() => {
     onReportChange?.(report);

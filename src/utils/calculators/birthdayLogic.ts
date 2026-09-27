@@ -16,6 +16,7 @@ import {
   type NextBirthdayInfo,
   validateDateInput,
   getNextBirthday,
+  calculateAge,
   isLeapYear,
   atMidnight,
   getWeekdayLabel,
@@ -24,6 +25,15 @@ import {
 } from './dateLogic';
 
 export type { ValidationResult, SourceEntry, NextBirthdayInfo };
+
+// --- CURRENT AGE ---
+// Re-exported as-is from dateLogic.ts (the Chronological Age Calculator's
+// own engine) rather than reimplemented here — Birthday Calculator only
+// needs a single, static "as of now" years/months/days snapshot for the
+// Next Birthday card's header (see CurrentAgeCaption in
+// BirthdayCalculator.tsx), not the live-ticking, totalSeconds-down-to-the-
+// second breakdown that calculator builds on top of this same function.
+export const calculateCurrentAge = calculateAge;
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = 60 * MS_PER_SECOND;

@@ -406,10 +406,15 @@ export const getBirthMonthLore = (birthDate: Date): BirthMonthLoreInfo => {
 };
 
 // -- Generation label --
-// Named US generation cohorts by birth-year range, per Pew Research
-// Center's commonly-cited cutoffs. Pew has said it will not name a firm
-// end year for "Generation Alpha"-successor cohorts yet, so the final,
-// open-ended band is labeled without a fixed upper bound.
+// Named generation cohorts by birth-year range. Silent Generation through
+// Generation Z follow the cutoffs commonly cited by Pew Research Center.
+// Generation Alpha and Generation Beta follow demographer Mark McCrindle,
+// who coined both names; Pew itself has said it won't name new generations
+// past Gen Z. Only the LAST entry in this table is open-ended (no fixed
+// upper bound) — that's always whichever cohort is currently the newest
+// and youngest, so as new cohorts get named, close off the previous
+// "current" entry with a real endYear and append the new one after it,
+// rather than leaving more than one entry open-ended at a time.
 export interface GenerationInfo {
   label: string;
   yearRange: string;
@@ -422,7 +427,8 @@ const GENERATION_TABLE: { label: string; startYear: number; endYear: number | nu
   { label: 'Generation X', startYear: 1965, endYear: 1980 },
   { label: 'Millennials', startYear: 1981, endYear: 1996 },
   { label: 'Generation Z', startYear: 1997, endYear: 2012 },
-  { label: 'Generation Alpha', startYear: 2013, endYear: null },
+  { label: 'Generation Alpha', startYear: 2013, endYear: 2024 },
+  { label: 'Generation Beta', startYear: 2025, endYear: null },
 ];
 
 export const getGeneration = (birthYear: number): GenerationInfo => {
@@ -513,9 +519,9 @@ export const BIRTHDAY_SOURCES: SourceEntry[] = [
   },
   {
     metric: 'Generation Label',
-    citation: 'Generation year ranges (Silent Generation, Baby Boomers, Generation X, Millennials, Generation Z, Generation Alpha) follow the cutoffs commonly used by Pew Research Center. Pew notes these boundaries are analytical tools, not hard scientific lines, and other organizations sometimes use slightly different year ranges.',
-    url: 'https://www.pewresearch.org/short-reads/2019/01/17/where-millennials-end-and-generation-z-begins/',
-    linkLabel: 'Pew Research Center \u2014 Defining generations',
+    citation: 'Generation year ranges from the Silent Generation through Generation Z follow the cutoffs commonly used by Pew Research Center, which has said it will not name any further generations past Gen Z. Generation Alpha (2013\u20132024) and Generation Beta (2025 onward) follow the year ranges from demographer Mark McCrindle, who coined both names. These are all analytical conventions, not hard scientific lines, and other organizations sometimes use slightly different year ranges \u2014 for example, some place Generation Alpha\'s start at 2010 rather than 2013.',
+    url: 'https://en.wikipedia.org/wiki/Generation_Beta',
+    linkLabel: 'Wikipedia \u2014 Generation Beta',
   },
   {
     metric: 'Life Path Number',

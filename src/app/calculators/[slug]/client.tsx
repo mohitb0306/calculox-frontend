@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -159,39 +160,70 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
     }
   };
 
-  const handleShareCalculator = async () => {
+  // Generates the same PDF as the "PDF Report" download and opens the browser's
+  // print dialog for it (via a hidden iframe). Falls back to opening the PDF
+  // in a new tab if the iframe can't be printed (e.g. some Safari/mobile builds).
+  const handlePrintReport = async () => {
     if (typeof window === "undefined") return;
-    const shareUrl = window.location.href;
-    const shareData = {
-      title: calculator.name,
-      text: calculator.description,
-      url: shareUrl,
-    };
+    if (!currentReport) {
+      toast.error("Please calculate first, then print your result.");
+      return;
+    }
+    if (downloadingFormat) return;
+    setDownloadingFormat("pdf");
+    let objectUrl: string | null = null;
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success("Link copied to clipboard!");
-      }
+      const siteInfo = {
+        name: settings?.siteName || "Calculox",
+        url: (process.env.NEXT_PUBLIC_APP_URL || "https://calculox.com").replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      };
+      const blob = await withMinimumDelay(generateResultPdf(currentReport, siteInfo), 900);
+      objectUrl = URL.createObjectURL(blob);
+      const url = objectUrl;
+
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+      iframe.src = url;
+
+      const cleanup = () => {
+        setTimeout(() => {
+          iframe.remove();
+          URL.revokeObjectURL(url);
+        }, 60000);
+      };
+
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          cleanup();
+        } catch {
+          window.open(url, "_blank");
+          cleanup();
+        }
+      };
+      document.body.appendChild(iframe);
     } catch (error) {
-      // AbortError fires when the user simply dismisses the native share
-      // sheet — that's not a failure worth surfacing.
-      if ((error as any)?.name !== "AbortError") {
-        toast.error("Could not share this page.");
-      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      toast.error("Could not prepare the print view. Please try again.");
+    } finally {
+      setDownloadingFormat(null);
     }
   };
+
+  const linkCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopyLink = async () => {
     if (typeof window === "undefined") return;
     try {
       await navigator.clipboard.writeText(window.location.href);
       setLinkCopied(true);
-      toast.success("Link copied!");
-      setTimeout(() => setLinkCopied(false), 2000);
+      // No success toast: the Link button itself switches to a check + "Copied".
+      // Restart the "Copied" timer so rapid clicks don't reset the icon early.
+      if (linkCopiedTimer.current) clearTimeout(linkCopiedTimer.current);
+      linkCopiedTimer.current = setTimeout(() => setLinkCopied(false), 2000);
     } catch (error) {
-      toast.error("Could not copy the link.");
+      toast.error("Could not copy the link.", { id: "link-copied" });
     }
   };
 
@@ -348,7 +380,7 @@ export default function CalculatorClientPage({ calculator, allCalculators, setti
                       onReportChange: setCurrentReport,
                       onDownloadReport: handleDownloadReport,
                       downloadingFormat: downloadingFormat,
-                      onShare: handleShareCalculator,
+                      onPrint: handlePrintReport,
                       onEmailShare: handleEmailShare,
                       onCopyLink: handleCopyLink,
                       linkCopied: linkCopied

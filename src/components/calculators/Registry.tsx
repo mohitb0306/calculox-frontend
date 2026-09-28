@@ -10,15 +10,13 @@ import BodyFatCalculator from "./BodyFatCalculator";
 import WHRCalculator from "./WHRCalculator";
 import ChronologicalAgeCalculator from "./ChronologicalAgeCalculator";
 import BirthdayCalculator from "./BirthdayCalculator";
+import AgeDifferenceCalculator from "./AgeDifferenceCalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
 export const SIPCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">SIP Calculator Component (Coming Soon)</div>;
 export const GSTCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">GST Calculator Component (Coming Soon)</div>;
 export const PercentageCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Percentage Calculator Component (Coming Soon)</div>;
-// Age Difference Calculator remains a placeholder — next in the
-// shared-dateLogic.ts family, per the agreed build order.
-export const AgeDifferenceCalculator = (props: any) => <div className="p-10 text-center bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400">Age Difference Calculator Component (Coming Soon)</div>;
 
 // --- REGISTRY MAPPING ---
 export const renderCalculatorComponent = (key: string, props: any) => {
@@ -75,6 +73,16 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "age-difference":
     case "age-difference-calculator":
     case "age-gap-calculator":
+    case "age-gap":
+    // Long-tail SEO aliases — same component, distinct landing-page
+    // metadata/H1 supplied by each route (see the "programmatic SEO"
+    // play in the Age Difference blueprint). Add new aliases here only;
+    // never fork the component per-alias.
+    case "marriage-age-calculator":
+    case "couple-age-difference-calculator":
+    case "sibling-age-gap-calculator":
+    case "age-gap-in-relationships-calculator":
+    case "who-is-older-calculator":
         return <AgeDifferenceCalculator {...props} />;
 
     default: 

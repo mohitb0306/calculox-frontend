@@ -37,7 +37,7 @@ import SegmentedRingChart from '@/components/charts/SegmentedRingChart';
 const {
   FiAlertCircle, FiInfo, FiZap, FiArrowDown, FiImage, FiFileText, FiLoader,
   FiRotateCcw, FiCheckCircle, FiExternalLink, FiTrendingUp, FiTrendingDown,
-  FiMinus, FiShield, FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown,
+  FiMinus, FiShield, FiPrinter, FiMail, FiCopy, FiCheck, FiChevronDown,
   FiDownload, FiBarChart2, FiActivity, FiUser, FiWind, FiAward, FiSliders,
 } = FiIcons;
 
@@ -53,7 +53,7 @@ interface BMRCalculatorProps {
    * the parent page, same as BMICalculator. */
   onDownloadReport?: (format: 'image' | 'pdf') => void;
   downloadingFormat?: 'image' | 'pdf' | null;
-  onShare?: () => void;
+  onPrint?: () => void;
   onEmailShare?: () => void;
   onCopyLink?: () => void;
   linkCopied?: boolean;
@@ -564,7 +564,7 @@ const bmrSelectOptionThemeCSS = `
 
 const BMRCalculator: React.FC<BMRCalculatorProps> = ({
   onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null,
-  onShare, onEmailShare, onCopyLink, linkCopied = false,
+  onPrint, onEmailShare, onCopyLink, linkCopied = false,
 }) => {
   const prefersReducedMotion = useReducedMotion();
 
@@ -1124,11 +1124,11 @@ const BMRCalculator: React.FC<BMRCalculatorProps> = ({
       <div className="flex items-center gap-2.5">
         <button
           type="button"
-          onClick={() => onShare?.()}
+          onClick={() => onPrint?.()}
           className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:shadow-md hover:ring-blue-200 dark:hover:ring-blue-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer"
-          title="Share this calculator"
+          title="Print this result"
         >
-          <SafeIcon icon={FiShare2} className="w-4 h-4" />
+          <SafeIcon icon={FiPrinter} className="w-4 h-4" />
         </button>
 
         <button

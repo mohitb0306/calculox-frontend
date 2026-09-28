@@ -38,7 +38,7 @@ import type { ShareableReport } from '@/lib/reports/types';
 
 const {
   FiInfo, FiAlertCircle, FiAlertTriangle, FiCheckCircle, FiRotateCcw, FiChevronDown,
-  FiDownload, FiImage, FiFileText, FiLoader, FiShare2, FiMail, FiCopy, FiCheck,
+  FiDownload, FiImage, FiFileText, FiLoader, FiPrinter, FiMail, FiCopy, FiCheck,
   FiArrowDown, FiExternalLink, FiActivity, FiLayers, FiTrendingDown, FiHeart, FiX, FiMaximize2, FiSliders,
 } = FiIcons;
 
@@ -47,7 +47,7 @@ interface WHRCalculatorProps {
   onReportChange?: (report: ShareableReport | null) => void;
   onDownloadReport?: (format: 'image' | 'pdf') => void;
   downloadingFormat?: 'image' | 'pdf' | null;
-  onShare?: () => void;
+  onPrint?: () => void;
   onEmailShare?: () => void;
   onCopyLink?: () => void;
   linkCopied?: boolean;
@@ -332,7 +332,7 @@ interface WHRSnapshot {
   isPregnant: boolean;
 }
 
-const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null, onShare, onEmailShare, onCopyLink, linkCopied = false }) => {
+const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null, onPrint, onEmailShare, onCopyLink, linkCopied = false }) => {
   const prefersReducedMotion = useReducedMotion();
 
   // Personal details
@@ -726,8 +726,8 @@ const WHRCalculator: React.FC<WHRCalculatorProps> = ({ onCalculationComplete, on
     <div className="flex flex-col items-center sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4 pt-5 mt-5 border-t border-neutral-100 dark:border-neutral-800 text-center sm:text-right">
       <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 tracking-wide">Like this? Please share</span>
       <div className="flex items-center gap-2.5">
-        <button type="button" onClick={() => onShare?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all duration-200 active:scale-95 cursor-pointer" title="Share this calculator">
-          <SafeIcon icon={FiShare2} className="w-4 h-4" />
+        <button type="button" onClick={() => onPrint?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all duration-200 active:scale-95 cursor-pointer" title="Print this result">
+          <SafeIcon icon={FiPrinter} className="w-4 h-4" />
         </button>
         <button type="button" onClick={() => onEmailShare?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-sm ring-1 ring-amber-100 dark:ring-amber-800/40 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all duration-200 active:scale-95 cursor-pointer" title="Share via email">
           <SafeIcon icon={FiMail} className="w-4 h-4" />

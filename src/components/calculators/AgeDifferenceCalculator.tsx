@@ -7,7 +7,7 @@
 // lookups rather than re-deriving any of it — see ageDifferenceLogic.ts
 // for the two-person math genuinely specific to this calculator.
 //
-// Visual language, primitives (InfoTip, SegmentedToggle, ResultCard,
+// Visual language, primitives (InfoTip, ResultCard,
 // SectionHeader, StatTile) and prop contract deliberately mirror
 // ChronologicalAgeCalculator.tsx / BirthdayCalculator.tsx exactly, so
 // this drops into the same Registry.tsx / report-download / share
@@ -31,10 +31,7 @@ import {
   DATE_SOURCES,
 } from '@/utils/calculators/dateLogic';
 import {
-  type AgeDifferenceInputMode,
   type AgeDifferenceResult,
-  ageToApproxBirthDate,
-  birthYearToApproxBirthDate,
   validateAgeDifferenceInput,
   calculateAgeDifference,
   getCatchUpDate,
@@ -49,7 +46,7 @@ const {
   FiUsers, FiClock, FiTrendingUp, FiAlertCircle, FiInfo, FiCalendar,
   FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload,
   FiRotateCcw, FiZap, FiStar, FiGift, FiFlag, FiCheckCircle,
-  FiLoader, FiImage, FiFileText,
+  FiLoader, FiImage, FiFileText, FiArrowDown, FiExternalLink,
 } = FiIcons;
 
 interface AgeDifferenceCalculatorProps {
@@ -169,47 +166,6 @@ const InfoTip: React.FC<{ text: string; widthClass?: string; align?: 'center' | 
     </span>
   );
 };
-
-// --- SEGMENTED TOGGLE --- (identical contract to ChronologicalAgeCalculator.tsx's SegmentedToggle)
-interface SegmentedToggleOption<T extends string> { value: T; label: string; }
-function SegmentedToggle<T extends string>({
-  value, onChange, options, groupId, ariaLabel, size = 'md',
-}: {
-  value: T; onChange: (v: T) => void; options: SegmentedToggleOption<T>[];
-  groupId: string; ariaLabel: string; size?: 'sm' | 'md';
-}) {
-  const prefersReducedMotion = useReducedMotion();
-  const isSm = size === 'sm';
-  return (
-    <div
-      className={`relative inline-flex bg-neutral-100 dark:bg-neutral-900/60 border border-neutral-200/70 dark:border-neutral-700/50 rounded-full ${isSm ? 'p-1' : 'flex w-full p-1.5'}`}
-      role="group"
-      aria-label={ariaLabel}
-    >
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(opt.value)}
-            className={`relative rounded-full transition-colors duration-150 cursor-pointer ${isSm ? 'px-3.5 py-1.5 text-xs' : 'flex-1 px-4 py-2.5 text-sm'} ${active ? 'text-white font-bold' : 'text-neutral-500 dark:text-neutral-400 font-semibold hover:text-neutral-700 dark:hover:text-neutral-200'}`}
-          >
-            {active && (
-              <motion.span
-                layoutId={`segment-pill-${groupId}`}
-                className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-[0_2px_10px_-1px_rgba(99,102,241,0.55)]"
-                transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 34 }}
-              />
-            )}
-            <span className="relative z-10">{opt.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // --- SHARED RESULT-SECTION PRIMITIVES --- (identical contract to ChronologicalAgeCalculator.tsx)
 type IconType = React.ComponentProps<typeof SafeIcon>['icon'];
@@ -353,17 +309,16 @@ const StatTile: React.FC<{
         style={{ ...fitNumberStyle(value, maxRem), textShadow: '0 1px 6px rgba(0,0,0,0.18)' }}
       >
         {segments && segments.every((seg) => seg.label) ? (
-          <span className="flex items-stretch justify-center gap-1 whitespace-normal">
+          <span className="flex items-stretch justify-center whitespace-normal">
             {segments.map((seg, i) => (
               <span
                 key={seg.unit}
-                className="relative flex flex-1 min-w-0 flex-col items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 px-0.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_6px_14px_-8px_rgba(0,0,0,0.5)]"
+                className={`relative flex flex-1 min-w-0 flex-col items-center justify-center px-0.5 py-1.5 ${i > 0 ? 'border-l border-white/50' : ''}`}
               >
-                <span aria-hidden="true" className="absolute inset-x-2 top-0 h-px rounded-full bg-gradient-to-r from-transparent via-amber-300/80 to-transparent" />
                 <span className="text-[1.1rem] sm:text-[1.25rem] leading-none font-extrabold tabular-nums tracking-tight">
                   <CountUp value={seg.value} delay={delay + i * 0.08} />
                 </span>
-                <span className="mt-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.05em] text-white/85">{seg.label}</span>
+                <span className="mt-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.05em] text-white/95">{seg.label}</span>
               </span>
             ))}
           </span>
@@ -427,12 +382,11 @@ interface GapHeadlineCardProps {
    *  agree by coincidence whenever Person 2 happened to be older. */
   olderIsPersonA: boolean;
   isApproximate: boolean;
-  inputMode: AgeDifferenceInputMode;
   replayKey: string;
 }
 
 const GapHeadlineCard: React.FC<GapHeadlineCardProps> = ({
-  gapYears, gapMonths, gapDays, olderName, youngerName, initialOlder, initialYounger, olderIsPersonA, isApproximate, inputMode, replayKey,
+  gapYears, gapMonths, gapDays, olderName, youngerName, initialOlder, initialYounger, olderIsPersonA, isApproximate, replayKey,
 }) => {
   const reduced = useReducedMotion();
 
@@ -718,13 +672,6 @@ const GapHeadlineCard: React.FC<GapHeadlineCardProps> = ({
           <span className="text-white/90">older than</span>
           <span className="font-extrabold text-white">{youngerName}</span>
         </motion.p>
-
-        {isApproximate && (
-          <motion.div {...fadeUp(0.36)} className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-white/85">
-            <SafeIcon icon={FiInfo} className="w-3 h-3 flex-shrink-0" />
-            Approximate — based on the {inputMode === 'ages' ? 'ages' : 'birth years'} entered above
-          </motion.div>
-        )}
       </div>
     </motion.div>
   );
@@ -1272,11 +1219,6 @@ const CompareProfileCard: React.FC<{
   );
 };
 
-// --- INPUT MODE HELPERS ---
-
-const currentYear = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from({ length: 131 }, (_, i) => currentYear - i);
-
 // Slow, eased scroll to an element. The browser's built-in smooth scroll is
 // short (a few hundred ms) and differs per browser, so it reads as a jump.
 // The target is re-measured every frame because the results mount while
@@ -1309,19 +1251,11 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
   const chartUid = useId();
 
   // --- STATE ---
-  const [inputMode, setInputMode] = useState<AgeDifferenceInputMode>('birthdates');
-
   const [personAName, setPersonAName] = useState<string>('');
   const [personBName, setPersonBName] = useState<string>('');
 
   const [personABirthDate, setPersonABirthDate] = useState<Date | null>(null);
   const [personBBirthDate, setPersonBBirthDate] = useState<Date | null>(null);
-
-  const [personAAgeInput, setPersonAAgeInput] = useState<string>('');
-  const [personBAgeInput, setPersonBAgeInput] = useState<string>('');
-
-  const [personABirthYear, setPersonABirthYear] = useState<number | ''>('');
-  const [personBBirthYear, setPersonBBirthYear] = useState<number | ''>('');
 
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -1397,38 +1331,19 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
     };
   }, [hasCalculated]);
 
-  // --- DERIVE BIRTH DATES FROM THE ACTIVE INPUT MODE ---
-  const resolveBirthDates = (): { a: Date | null; b: Date | null; approximate: boolean } => {
-    const today = new Date();
-    if (inputMode === 'birthdates') {
-      return { a: personABirthDate, b: personBBirthDate, approximate: false };
-    }
-    if (inputMode === 'ages') {
-      const ageA = Number(personAAgeInput);
-      const ageB = Number(personBAgeInput);
-      const validA = personAAgeInput.trim() !== '' && Number.isFinite(ageA) && ageA >= 0 && ageA <= 130;
-      const validB = personBAgeInput.trim() !== '' && Number.isFinite(ageB) && ageB >= 0 && ageB <= 130;
-      return {
-        a: validA ? ageToApproxBirthDate(ageA, today) : null,
-        b: validB ? ageToApproxBirthDate(ageB, today) : null,
-        approximate: true,
-      };
-    }
-    // birthYears
-    const validYearA = personABirthYear !== '' && Number(personABirthYear) <= currentYear;
-    const validYearB = personBBirthYear !== '' && Number(personBBirthYear) <= currentYear;
-    return {
-      a: validYearA ? birthYearToApproxBirthDate(Number(personABirthYear)) : null,
-      b: validYearB ? birthYearToApproxBirthDate(Number(personBBirthYear)) : null,
-      approximate: true,
-    };
-  };
+  // --- BIRTH DATES ---
+  // The calculator works from exact birth dates only.
+  const resolveBirthDates = (): { a: Date | null; b: Date | null; approximate: boolean } => ({
+    a: personABirthDate,
+    b: personBBirthDate,
+    approximate: false,
+  });
 
   const isCalculateDisabled = useMemo(() => {
     const { a, b } = resolveBirthDates();
     return !a || !b;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputMode, personABirthDate, personBBirthDate, personAAgeInput, personBAgeInput, personABirthYear, personBBirthYear]);
+  }, [personABirthDate, personBBirthDate]);
 
   // Same contract as ChronologicalAgeCalculator.tsx's isClearDisabled:
   // nothing to clear once every field is already empty and no result is
@@ -1436,16 +1351,12 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
   const isClearDisabled = useMemo(() => {
     const noInputs =
       !personABirthDate && !personBBirthDate &&
-      personAAgeInput.trim() === '' && personBAgeInput.trim() === '' &&
-      personABirthYear === '' && personBBirthYear === '' &&
       personAName.trim() === '' && personBName.trim() === '';
     return noInputs && !hasCalculated;
-  }, [personABirthDate, personBBirthDate, personAAgeInput, personBAgeInput, personABirthYear, personBBirthYear, personAName, personBName, hasCalculated]);
+  }, [personABirthDate, personBBirthDate, personAName, personBName, hasCalculated]);
 
   const handleClear = () => {
     setPersonABirthDate(null); setPersonBBirthDate(null);
-    setPersonAAgeInput(''); setPersonBAgeInput('');
-    setPersonABirthYear(''); setPersonBBirthYear('');
     setPersonAName(''); setPersonBName('');
     setHasCalculated(false); setFormError(null);
     setCommittedA(null); setCommittedB(null);
@@ -1575,7 +1486,7 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
 
   // --- RENDER ---
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6">
+    <div className="w-full max-w-3xl mx-auto space-y-5">
       {/* --- INPUT FIELDS CARD ---
           Plain treatment matching ChronologicalAgeCalculator.tsx /
           BirthdayCalculator.tsx exactly: no tinted background, no
@@ -1592,24 +1503,6 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
               <SafeIcon icon={FiUsers} className="w-3 h-3" />
               Two People Based
             </span>
-          </div>
-
-          <div className="lg:w-2/3">
-            <div className={fieldLabelRowClass}>
-              <span className={fieldLabelClass}>Calculate from</span>
-              <InfoTip text="Birthdates give a calendar-exact gap. Ages or birth years alone are converted to an approximate birth date." />
-            </div>
-            <SegmentedToggle
-              value={inputMode}
-              onChange={(v) => { setInputMode(v); setFormError(null); }}
-              groupId="age-diff-mode"
-              ariaLabel="Calculate from"
-              options={[
-                { value: 'birthdates', label: 'Birthdates' },
-                { value: 'birthYears', label: 'Birth Years' },
-                { value: 'ages', label: 'Ages' },
-              ]}
-            />
           </div>
 
           <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
@@ -1634,44 +1527,12 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
                   className={`${plainFieldClass} placeholder:text-neutral-400 placeholder:font-medium`}
                 />
               </div>
-              {inputMode === 'birthdates' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Date of Birth</label>
-                  </div>
-                  <DateTimePicker value={personABirthDate} onChange={setPersonABirthDate} ariaLabel="Person 1 date of birth" dateLabel="" maxDate={new Date()} />
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label className={fieldLabelClass}>Date of Birth</label>
                 </div>
-              )}
-              {inputMode === 'ages' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Age (years)</label>
-                  </div>
-                  <input
-                    type="number" min={0} max={130} value={personAAgeInput}
-                    onChange={(e) => setPersonAAgeInput(e.target.value)}
-                    placeholder="e.g. 28"
-                    aria-label="Person 1 age in years"
-                    className={plainFieldClass}
-                  />
-                </div>
-              )}
-              {inputMode === 'birthYears' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Birth Year</label>
-                  </div>
-                  <select
-                    value={personABirthYear}
-                    onChange={(e) => setPersonABirthYear(e.target.value ? Number(e.target.value) : '')}
-                    aria-label="Person 1 birth year"
-                    className={plainFieldClass}
-                  >
-                    <option value="">Select year</option>
-                    {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              )}
+                <DateTimePicker value={personABirthDate} onChange={setPersonABirthDate} ariaLabel="Person 1 date of birth" dateLabel="" maxDate={new Date()} />
+              </div>
             </div>
 
             {/* PERSON 2 — sky identity accent, mirroring Person 1's
@@ -1696,55 +1557,14 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
                   className={`${plainFieldClass} placeholder:text-neutral-400 placeholder:font-medium`}
                 />
               </div>
-              {inputMode === 'birthdates' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Date of Birth</label>
-                  </div>
-                  <DateTimePicker value={personBBirthDate} onChange={setPersonBBirthDate} ariaLabel="Person 2 date of birth" dateLabel="" maxDate={new Date()} />
+              <div>
+                <div className={fieldLabelRowClass}>
+                  <label className={fieldLabelClass}>Date of Birth</label>
                 </div>
-              )}
-              {inputMode === 'ages' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Age (years)</label>
-                  </div>
-                  <input
-                    type="number" min={0} max={130} value={personBAgeInput}
-                    onChange={(e) => setPersonBAgeInput(e.target.value)}
-                    placeholder="e.g. 31"
-                    aria-label="Person 2 age in years"
-                    className={plainFieldClass}
-                  />
-                </div>
-              )}
-              {inputMode === 'birthYears' && (
-                <div>
-                  <div className={fieldLabelRowClass}>
-                    <label className={fieldLabelClass}>Birth Year</label>
-                  </div>
-                  <select
-                    value={personBBirthYear}
-                    onChange={(e) => setPersonBBirthYear(e.target.value ? Number(e.target.value) : '')}
-                    aria-label="Person 2 birth year"
-                    className={plainFieldClass}
-                  >
-                    <option value="">Select year</option>
-                    {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-              )}
+                <DateTimePicker value={personBBirthDate} onChange={setPersonBBirthDate} ariaLabel="Person 2 date of birth" dateLabel="" maxDate={new Date()} />
+              </div>
             </div>
           </div>
-
-          {inputMode !== 'birthdates' && (
-            <p className="flex items-start gap-1.5 text-xs font-medium text-neutral-400 dark:text-neutral-500">
-              <SafeIcon icon={FiInfo} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              {inputMode === 'ages'
-                ? 'Ages are converted to an approximate birth date, so results here are close but not calendar-exact. Use Birthdates for a precise gap.'
-                : 'Birth years alone are assumed to fall mid-year, so results here are approximate. Use Birthdates for a precise gap.'}
-            </p>
-          )}
 
           <AnimatePresence>
             {formError && (
@@ -1763,7 +1583,7 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
       </div>
 
       {/* ACTION BUTTONS — identical shared styling to ChronologicalAgeCalculator.tsx / BirthdayCalculator.tsx's Clear + Calculate pair */}
-      <div ref={actionButtonsRef} className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-1">
+      <div ref={actionButtonsRef} className="flex flex-col-reverse md:flex-row justify-center items-center gap-4 pt-4">
         <button
           type="button"
           onClick={handleClear}
@@ -1781,35 +1601,27 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
             background: 'linear-gradient(180deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%)',
             boxShadow: '0 10px 20px -6px rgba(79,70,229,0.45), 0 4px 8px -2px rgba(79,70,229,0.25)',
           }}
-          className="group relative w-full md:w-auto inline-flex items-center justify-center gap-2 px-10 py-3.5 text-white text-sm font-semibold tracking-normal rounded-lg overflow-hidden hover:brightness-[1.08] active:scale-[0.98] active:brightness-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
+          className="group relative w-full md:w-auto inline-flex items-center justify-center gap-2 px-10 py-3.5 text-white text-sm font-semibold tracking-normal rounded-lg hover:brightness-[1.08] active:scale-[0.98] active:brightness-95 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100 disabled:active:scale-100"
         >
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 w-1/3 -skew-x-[20deg] bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-[150%] group-hover:translate-x-[300%] transition-transform duration-700 ease-out"
-          />
           <SafeIcon icon={FiCheckCircle} className="w-4 h-4" />
           Calculate
         </button>
       </div>
 
-      {/* EMPTY STATE — same dashed neutral treatment as the other two calculators, shown until the first result lands */}
-      {!result && (
+      {/* EMPTY STATE — identical to the other calculators: static icon, shown until the first result lands and hidden while an error is showing */}
+      {!result && !formError && (
         <motion.div
           initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4 }}
           className="flex flex-col items-center text-center py-14 px-6 rounded-3xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/20"
         >
-          <motion.svg
-            width="100" height="100" viewBox="0 0 100 100" fill="none" aria-hidden="true" className="text-neutral-300 dark:text-neutral-600"
-            animate={prefersReducedMotion ? undefined : { y: [0, -6, 0] }}
-            transition={prefersReducedMotion ? undefined : { duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-          >
+          <svg width="100" height="100" viewBox="0 0 100 100" fill="none" aria-hidden="true" className="text-neutral-300 dark:text-neutral-600">
             <circle cx="38" cy="42" r="16" stroke="currentColor" strokeWidth="5" />
             <circle cx="70" cy="50" r="11" stroke="currentColor" strokeWidth="5" />
             <path d="M20 82 C20 66 28 58 38 58 C48 58 56 66 56 82" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
             <path d="M56 82 C56 70 62 63 70 63 C78 63 84 70 84 82" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-          </motion.svg>
+          </svg>
           <h3 className="mt-5 text-lg font-extrabold text-neutral-500 dark:text-neutral-400">
             Your Results Will Appear Here
           </h3>
@@ -1848,7 +1660,6 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
               initialYounger={(youngerName || 'Y').trim().charAt(0).toUpperCase()}
               olderIsPersonA={result.olderIsPersonA}
               isApproximate={isApproximate}
-              inputMode={inputMode}
               replayKey={String(resultKey)}
             />
 
@@ -2067,70 +1878,123 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
         )}
       </AnimatePresence>
 
-      {/* SOURCES — always visible, not only after a result */}
-      {/* SOURCES DRAWER */}
-      <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-        <button
-          type="button"
-          onClick={toggleSources}
-          aria-expanded={showSources}
-          className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 bg-white dark:bg-neutral-800 ${sourcesPulse ? 'animate-pulse' : ''}`}
-        >
-          <span className="flex items-center gap-2.5">
-            <SafeIcon icon={FiInfo} className="w-4 h-4 text-neutral-400" />
-            <span className="text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources</span>
+      {/* SHARE, DISCLAIMER and SOURCES — always visible (not only after a result), in the
+          same order and styling as the other calculators: Share -> Disclaimer -> Sources.
+          Wrapped in one element so the root's space-y-6 doesn't stack on their own margins. */}
+      <div>
+        {/* SHARE */}
+        <div className="flex flex-col items-center sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4 pt-5 mt-5 border-t border-neutral-100 dark:border-neutral-800 text-center sm:text-right">
+          <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 tracking-wide">
+            Like this? Please share
           </span>
-          <span className={`flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-out ${showSources ? 'rotate-180' : ''}`}>
-            <SafeIcon icon={FiChevronDown} className="w-4 h-4" />
-          </span>
-        </button>
-        <motion.div animate={{ height: showSources ? 'auto' : 0 }} className="overflow-hidden" aria-hidden={!showSources}>
-          <div className="px-4 pb-4 pt-1 space-y-3 bg-white dark:bg-neutral-800">
-            {combinedSources.map((s, i) => (
-              <div key={i} className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400 border-t border-neutral-100 dark:border-neutral-700/60 pt-3 first:border-t-0 first:pt-0">
-                <p className="font-bold text-neutral-800 dark:text-neutral-200 mb-1">{s.metric}</p>
-                <p>{s.citation}</p>
-                {s.url && <a href={s.url} tabIndex={showSources ? 0 : -1} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 font-semibold text-indigo-700 dark:text-indigo-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 rounded-sm">{s.linkLabel ?? 'Source'}</a>}
-              </div>
-            ))}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleShareClick}
+              className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:shadow-md hover:ring-blue-200 dark:hover:ring-blue-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer"
+              title="Share this calculator"
+              aria-label="Share this calculator"
+            >
+              <SafeIcon icon={FiShare2} className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleEmailClick}
+              className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-sm ring-1 ring-amber-100 dark:ring-amber-800/40 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:shadow-md hover:ring-amber-200 dark:hover:ring-amber-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer"
+              title="Share via email"
+              aria-label="Share via email"
+            >
+              <SafeIcon icon={FiMail} className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyLinkClick}
+              className={`inline-flex items-center gap-1.5 pl-3.5 pr-4 h-10 rounded-full shadow-sm ring-1 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer ${
+                isLinkCopied
+                  ? 'bg-green-50 dark:bg-green-500/10 ring-green-100 dark:ring-green-800/40 text-green-500 dark:text-green-400'
+                  : 'bg-violet-50 dark:bg-violet-500/10 ring-violet-100 dark:ring-violet-800/40 text-violet-500 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/20 hover:shadow-md hover:ring-violet-200 dark:hover:ring-violet-700/60 hover:-translate-y-0.5'
+              }`}
+              title="Copy link to this calculator"
+              aria-label="Copy link to this calculator"
+            >
+              <SafeIcon icon={isLinkCopied ? FiCheck : FiCopy} className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="text-xs font-semibold tracking-wide whitespace-nowrap">{isLinkCopied ? 'Copied' : 'Link'}</span>
+            </button>
           </div>
-        </motion.div>
-      </div>
+        </div>
 
-      {/* SHARE — always visible, matching the other calculators */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">Like this? Please share</span>
-        <button
-          type="button"
-          onClick={handleShareClick}
-          aria-label="Share this calculator"
-          className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-blue-500/25 bg-blue-500/10 text-blue-500 transition-colors duration-150 hover:bg-blue-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 cursor-pointer"
-        >
-          <SafeIcon icon={FiShare2} className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          onClick={handleEmailClick}
-          aria-label="Share by email"
-          className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-500 transition-colors duration-150 hover:bg-amber-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 cursor-pointer"
-        >
-          <SafeIcon icon={FiMail} className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          onClick={handleCopyLinkClick}
-          aria-label="Copy link"
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-rose-500/25 bg-rose-500/10 px-5 text-sm font-bold text-rose-500 transition-colors duration-150 hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 cursor-pointer"
-        >
-          <SafeIcon icon={isLinkCopied ? FiCheck : FiCopy} className="h-4 w-4" />
-          {isLinkCopied ? 'Copied!' : 'Link'}
-        </button>
-      </div>
+        {/* DISCLAIMER */}
+        <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 space-y-3 mt-5">
+          <p className="leading-normal">
+            <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This calculator provides general date-based information for informational and entertainment purposes only. The age gap is calculated from the dates or ages you enter; when you enter ages or birth years, results are approximate.
+          </p>
+        </div>
 
-      {/* DISCLAIMER */}
-      <p className="text-sm font-medium leading-relaxed text-neutral-500 dark:text-neutral-400">
-        <strong className="font-extrabold text-neutral-800 dark:text-neutral-100">Disclaimer:</strong> This calculator provides general date-based information for informational and entertainment purposes only. The age gap is calculated from the dates or ages you enter; when you enter ages or birth years, results are approximate. Percentages, generation labels and zodiac signs are mathematical framings and cultural conventions, not scientific or factual claims, and the population averages cited are not a &ldquo;normal&rdquo; or recommended range for any individual relationship.
-      </p>
+        {/* SOURCES ACCORDION — directly below the disclaimer */}
+        <div
+          style={sourcesPulse ? { boxShadow: '0 0 0 3px rgba(99,102,241,0.35)' } : undefined}
+          className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden transition-shadow duration-300"
+        >
+          <button
+            type="button"
+            onClick={toggleSources}
+            aria-expanded={showSources}
+            className="w-full flex items-center justify-between gap-4 p-3.5 sm:p-4 text-left cursor-pointer hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40 transition-colors duration-150"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-neutral-500 dark:text-neutral-400">
+                <SafeIcon icon={FiFileText} className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="block text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources</span>
+                <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-500 mt-0.5 leading-snug">
+                  {combinedSources.length} references — every convention and statistic used above, cited
+                </span>
+              </div>
+            </div>
+            <span className={`flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-out ${showSources ? 'rotate-180' : ''}`}>
+              <SafeIcon icon={FiArrowDown} className="w-4 h-4" />
+            </span>
+          </button>
+          <motion.div
+            initial={false}
+            animate={{ height: showSources ? 'auto' : 0 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeOut' }}
+            style={{ overflow: 'hidden' }}
+            aria-hidden={!showSources}
+          >
+            <div className="px-3.5 sm:px-4 pb-3.5 sm:pb-4">
+              <ol className="list-none space-y-4 divide-y divide-neutral-200/70 dark:divide-neutral-800">
+                {combinedSources.map((source, i) => (
+                  <li key={source.metric} className="flex gap-3 pt-4 first:pt-0 first:mt-0">
+                    <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 text-[10px] font-bold flex items-center justify-center tabular-nums">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
+                      <p className="leading-relaxed mt-1 text-neutral-600 dark:text-neutral-400">{source.citation}</p>
+                      {source.url && (
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="nofollow noopener noreferrer"
+                          tabIndex={showSources ? 0 : -1}
+                          className="group inline-flex items-center gap-1.5 mt-2.5 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-semibold text-[13px]"
+                        >
+                          <span className="underline-offset-2 group-hover:underline">{source.linkLabel ?? 'View source'}</span>
+                          <SafeIcon icon={FiExternalLink} className="w-3 h-3 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </motion.div>
+        </div>
+      </div>
     </div>
   );
 };

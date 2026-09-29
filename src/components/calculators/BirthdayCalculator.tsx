@@ -44,7 +44,7 @@ import type { ShareableReport } from '@/lib/reports/types';
 const {
   FiCalendar, FiGift, FiAlertCircle, FiInfo, FiArrowDown,
   FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiStar,
-  FiPrinter, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload,
+  FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload,
   FiImage, FiSunrise, FiFlag, FiTrendingUp, FiClock,
   FiMoon, FiCompass, FiDroplet, FiLayers, FiHexagon,
 } = FiIcons;
@@ -56,7 +56,7 @@ interface BirthdayCalculatorProps {
   onReportChange?: (report: ShareableReport | null) => void;
   onDownloadReport?: (format: 'image' | 'pdf') => void;
   downloadingFormat?: 'image' | 'pdf' | null;
-  onPrint?: () => void;
+  onShare?: () => void;
   onEmailShare?: () => void;
   onCopyLink?: () => void;
   linkCopied?: boolean;
@@ -1787,7 +1787,7 @@ const BirthProfileCard: React.FC<BirthProfileCardProps> = ({ western, chinese, l
 
 const BirthdayCalculator: React.FC<BirthdayCalculatorProps> = ({
   onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null,
-  onPrint, onEmailShare, onCopyLink, linkCopied = false,
+  onShare, onEmailShare, onCopyLink, linkCopied = false,
 }) => {
   const prefersReducedMotion = useReducedMotion();
 
@@ -2104,8 +2104,8 @@ const BirthdayCalculator: React.FC<BirthdayCalculatorProps> = ({
     <div className="flex flex-col items-center sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4 pt-5 mt-5 border-t border-neutral-100 dark:border-neutral-800 text-center sm:text-right">
       <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 tracking-wide">Like this? Please share</span>
       <div className="flex items-center gap-2.5">
-        <button type="button" onClick={() => onPrint?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:shadow-md hover:ring-blue-200 dark:hover:ring-blue-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer" title="Print this result">
-          <SafeIcon icon={FiPrinter} className="w-4 h-4" />
+        <button type="button" onClick={() => onShare?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:shadow-md hover:ring-blue-200 dark:hover:ring-blue-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer" title="Share this calculator" aria-label="Share this calculator">
+          <SafeIcon icon={FiShare2} className="w-4 h-4" />
         </button>
         <button type="button" onClick={() => onEmailShare?.()} className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-sm ring-1 ring-amber-100 dark:ring-amber-800/40 hover:bg-amber-100 dark:hover:bg-amber-500/20 hover:shadow-md hover:ring-amber-200 dark:hover:ring-amber-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer" title="Share via email">
           <SafeIcon icon={FiMail} className="w-4 h-4" />
@@ -2268,80 +2268,83 @@ const BirthdayCalculator: React.FC<BirthdayCalculatorProps> = ({
 
           <DayOfYearCard info={dayOfYear} birthYear={committedBirthDate.getFullYear()} />
 
-          {renderShareBar()}
-
-          {/* DISCLAIMER */}
-          <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 space-y-3 mt-5">
-            <p className="leading-normal">
-              <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This calculator provides general date-based information for informational and entertainment purposes only. The golden birthday is a popular tradition, not an official or legally defined milestone. Zodiac signs, the Chinese zodiac, birthstones/flowers, generation labels and the Life Path Number are cultural traditions, common conventions, or numerology — not scientific or factual claims.
-            </p>
-          </div>
-
-          {/* SOURCES ACCORDION */}
-          <div
-            ref={sourcesPanelRef}
-            style={sourcesPulse ? { boxShadow: '0 0 0 3px rgba(99,102,241,0.35)' } : undefined}
-            className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden transition-shadow duration-300"
-          >
-            <button
-              type="button"
-              onClick={toggleSources}
-              aria-expanded={showSources}
-              className="w-full flex items-center justify-between gap-4 p-3.5 sm:p-4 text-left cursor-pointer hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40 transition-colors duration-150"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-neutral-500 dark:text-neutral-400">
-                  <SafeIcon icon={FiFileText} className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <span className="block text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources</span>
-                  <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-500 mt-0.5 leading-snug">
-                    {BIRTHDAY_SOURCES.length} references — every convention used above, cited
-                  </span>
-                </div>
-              </div>
-              <span className={`flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-out ${showSources ? 'rotate-180' : ''}`}>
-                <SafeIcon icon={FiArrowDown} className="w-4 h-4" />
-              </span>
-            </button>
-            <motion.div
-              initial={false}
-              animate={{ height: showSources ? 'auto' : 0 }}
-              transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeOut' }}
-              style={{ overflow: 'hidden' }}
-              aria-hidden={!showSources}
-            >
-              <div className="px-3.5 sm:px-4 pb-3.5 sm:pb-4">
-                <ol className="list-none space-y-4 divide-y divide-neutral-200/70 dark:divide-neutral-800">
-                  {BIRTHDAY_SOURCES.map((source, i) => (
-                    <li key={source.metric} className="flex gap-3 pt-4 first:pt-0 first:mt-0">
-                      <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 text-[10px] font-bold flex items-center justify-center tabular-nums">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
-                        <p className="leading-relaxed mt-1 text-neutral-600 dark:text-neutral-400">{source.citation}</p>
-                        {source.url && (
-                          <a
-                            href={source.url}
-                            target="_blank"
-                            rel="nofollow noopener noreferrer"
-                            tabIndex={showSources ? 0 : -1}
-                            className="group inline-flex items-center gap-1.5 mt-2.5 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-semibold text-[13px]"
-                          >
-                            <span className="underline-offset-2 group-hover:underline">{source.linkLabel ?? 'View source'}</span>
-                            <SafeIcon icon={FiExternalLink} className="w-3 h-3 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
-                          </a>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </motion.div>
-          </div>
         </motion.div>
       )}
+
+      {/* ALWAYS VISIBLE — share, disclaimer and sources show even before a calculation,
+          matching the other calculators. */}
+      {renderShareBar()}
+
+      {/* DISCLAIMER */}
+      <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 space-y-3 mt-5">
+        <p className="leading-normal">
+          <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> This calculator provides general date-based information for informational and entertainment purposes only. The golden birthday is a popular tradition, not an official or legally defined milestone. Zodiac signs, the Chinese zodiac, birthstones/flowers, generation labels and the Life Path Number are cultural traditions, common conventions, or numerology — not scientific or factual claims.
+        </p>
+      </div>
+
+      {/* SOURCES ACCORDION */}
+      <div
+        ref={sourcesPanelRef}
+        style={sourcesPulse ? { boxShadow: '0 0 0 3px rgba(99,102,241,0.35)' } : undefined}
+        className="text-sm font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl border border-neutral-200 dark:border-neutral-800 mt-4 overflow-hidden transition-shadow duration-300"
+      >
+        <button
+          type="button"
+          onClick={toggleSources}
+          aria-expanded={showSources}
+          className="w-full flex items-center justify-between gap-4 p-3.5 sm:p-4 text-left cursor-pointer hover:bg-neutral-100/60 dark:hover:bg-neutral-800/40 transition-colors duration-150"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center bg-white dark:bg-neutral-900/50 shadow-sm border border-neutral-100 dark:border-neutral-700/50 text-neutral-500 dark:text-neutral-400">
+              <SafeIcon icon={FiFileText} className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources</span>
+              <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-500 mt-0.5 leading-snug">
+                {BIRTHDAY_SOURCES.length} references — every convention used above, cited
+              </span>
+            </div>
+          </div>
+          <span className={`flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-out ${showSources ? 'rotate-180' : ''}`}>
+            <SafeIcon icon={FiArrowDown} className="w-4 h-4" />
+          </span>
+        </button>
+        <motion.div
+          initial={false}
+          animate={{ height: showSources ? 'auto' : 0 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: 'easeOut' }}
+          style={{ overflow: 'hidden' }}
+          aria-hidden={!showSources}
+        >
+          <div className="px-3.5 sm:px-4 pb-3.5 sm:pb-4">
+            <ol className="list-none space-y-4 divide-y divide-neutral-200/70 dark:divide-neutral-800">
+              {BIRTHDAY_SOURCES.map((source, i) => (
+                <li key={source.metric} className="flex gap-3 pt-4 first:pt-0 first:mt-0">
+                  <span className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-neutral-200/70 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 text-[10px] font-bold flex items-center justify-center tabular-nums">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-neutral-800 dark:text-neutral-200">{source.metric}</p>
+                    <p className="leading-relaxed mt-1 text-neutral-600 dark:text-neutral-400">{source.citation}</p>
+                    {source.url && (
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="nofollow noopener noreferrer"
+                        tabIndex={showSources ? 0 : -1}
+                        className="group inline-flex items-center gap-1.5 mt-2.5 text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-semibold text-[13px]"
+                      >
+                        <span className="underline-offset-2 group-hover:underline">{source.linkLabel ?? 'View source'}</span>
+                        <SafeIcon icon={FiExternalLink} className="w-3 h-3 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
+                      </a>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };

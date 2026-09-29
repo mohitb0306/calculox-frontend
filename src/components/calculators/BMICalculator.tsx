@@ -8,7 +8,7 @@ import * as FiIcons from 'react-icons/fi';
 import { calculateBMI, getBMIRanges, validateBMIInput, validateWaistInput, calculateWaistMetrics, getBMIInsight, getGenderContextNote, generateBMIGrid, BMIUnit, BMIRegion } from '@/utils/calculators/bmiLogic';
 import type { ShareableReport } from '@/lib/reports/types';
 
-const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiPercent, FiLayers, FiMaximize2, FiShield, FiPrinter, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload, FiSliders } = FiIcons;
+const { FiTarget, FiTrendingUp, FiAlertCircle, FiInfo, FiHeart, FiArrowDown, FiBarChart2, FiImage, FiFileText, FiLoader, FiRotateCcw, FiCheckCircle, FiExternalLink, FiPercent, FiLayers, FiMaximize2, FiShield, FiShare2, FiMail, FiCopy, FiCheck, FiChevronDown, FiDownload, FiSliders } = FiIcons;
 
 interface BMICalculatorProps {
   onCalculationComplete?: () => void;
@@ -29,10 +29,9 @@ interface BMICalculatorProps {
   /** Which format is currently being generated, if any — drives the spinner
    * on whichever button was clicked and disables both while in progress. */
   downloadingFormat?: 'image' | 'pdf' | null;
-  /** Generates the PDF report and opens the browser print dialog for it (falling back to
-   * a new tab) — implemented by the parent page, same as onDownloadReport, since
-   * it owns generateResultPdf and the current report. */
-  onPrint?: () => void;
+  /** Opens the native share sheet for the calculator page (falls back to copying the
+   * link) — implemented by the parent page, same as onEmailShare / onCopyLink. */
+  onShare?: () => void;
   /** Opens the user's mail client with the calculator link pre-filled. */
   onEmailShare?: () => void;
   /** Copies the calculator page's link to the clipboard. */
@@ -354,7 +353,7 @@ const slowScrollToElement = (element: HTMLElement, duration = 1800, topOffset = 
   window.requestAnimationFrame(step);
 };
 
-const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null, onPrint, onEmailShare, onCopyLink, linkCopied = false }) => {
+const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, onReportChange, onDownloadReport, downloadingFormat = null, onShare, onEmailShare, onCopyLink, linkCopied = false }) => {
   const prefersReducedMotion = useReducedMotion();
   
   // State
@@ -901,11 +900,11 @@ const BMICalculator: React.FC<BMICalculatorProps> = ({ onCalculationComplete, on
       <div className="flex items-center gap-2.5">
         <button
           type="button"
-          onClick={() => onPrint?.()}
+          onClick={() => onShare?.()}
           className="w-10 h-10 inline-flex items-center justify-center rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 dark:text-blue-400 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800/40 hover:bg-blue-100 dark:hover:bg-blue-500/20 hover:shadow-md hover:ring-blue-200 dark:hover:ring-blue-700/60 hover:-translate-y-0.5 transition-all duration-200 active:scale-95 active:translate-y-0 cursor-pointer"
-          title="Print this result"
+          title="Share this calculator" aria-label="Share this calculator"
         >
-          <SafeIcon icon={FiPrinter} className="w-4 h-4" />
+          <SafeIcon icon={FiShare2} className="w-4 h-4" />
         </button>
 
         <button

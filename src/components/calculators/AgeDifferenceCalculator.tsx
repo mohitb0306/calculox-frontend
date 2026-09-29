@@ -1415,23 +1415,94 @@ const AgeDifferenceCalculator: React.FC<AgeDifferenceCalculatorProps> = ({
     return getCatchUpDate(result.youngerBirthDate, olderCurrentYears);
   }, [result]);
 
-  // --- SHAREABLE REPORT ---
-  // Best-effort mapping onto the app's ShareableReport shape — adjust
-  // field names here if they differ from what '@/lib/reports/types'
-  // actually exports; the calculation logic above is unaffected either way.
+  // --- REPORT ENGINE HOOKUP ---
+  // Builds the app's ShareableReport (same contract as BMI / Birthday / Chronological Age) so
+  // the PDF and PNG downloads work. Every field the generators read must be present.
+  const report = useMemo<ShareableReport | null>(() => {
+    if (!result || !committedA || !committedB) return null;
+
+    const older = result.olderIsPersonA ? result.personA : result.personB;
+    const younger = result.olderIsPersonA ? result.personB : result.personA;
+    const fmtAge = (a: { years: number; months: number; days: number }) =>
+      `${a.years} ${a.years === 1 ? 'year' : 'years'}, ${a.months} ${a.months === 1 ? 'month' : 'months'}, ${a.days} ${a.days === 1 ? 'day' : 'days'}`;
+
+    const profileRows: Array<{ label: string; value: string }> = [
+      { label: `${olderName} born`, value: formatLongDate(result.olderBirthDate, isApproximate) },
+      { label: `${youngerName} born`, value: formatLongDate(result.youngerBirthDate, isApproximate) },
+    ];
+    if (generationCompare) {
+      const olderGen = result.olderIsPersonA ? generationCompare.personA : generationCompare.personB;
+      const youngerGen = result.olderIsPersonA ? generationCompare.personB : generationCompare.personA;
+      profileRows.push(
+        generationCompare.sameGeneration
+          ? { label: 'Generation', value: `Both ${olderGen.label}` }
+          : { label: 'Generations', value: `${olderGen.label} / ${youngerGen.label}` },
+      );
+    }
+    if (zodiacCompare) {
+      const olderZ = result.olderIsPersonA ? zodiacCompare.personA : zodiacCompare.personB;
+      const youngerZ = result.olderIsPersonA ? zodiacCompare.personB : zodiacCompare.personA;
+      profileRows.push(
+        zodiacCompare.sameSign
+          ? { label: 'Zodiac', value: `Both ${olderZ.sign}` }
+          : { label: 'Zodiac signs', value: `${olderZ.sign} / ${youngerZ.sign}` },
+      );
+    }
+
+    const sections: ShareableReport['sections'] = [
+      {
+        heading: 'The Age Gap',
+        rows: [
+          { label: 'Age gap', value: formatAgeGap(result.gap) },
+          { label: 'Weeks apart', value: formatWithCommas(result.gap.totalWeeks) },
+          { label: 'Days apart', value: formatWithCommas(result.gap.totalDays) },
+          { label: 'Hours apart', value: formatWithCommas(result.gap.totalHours) },
+        ],
+        variant: 'output',
+      },
+      {
+        heading: 'Current Ages',
+        rows: [
+          { label: `${olderName} (older)`, value: fmtAge(older.currentAge) },
+          { label: `${youngerName} (younger)`, value: fmtAge(younger.currentAge) },
+        ],
+        variant: 'output',
+      },
+      { heading: 'Birth Dates & Profile', rows: profileRows, variant: 'output' },
+    ];
+
+    const pdfOnlySections: ShareableReport['sections'] = [
+      {
+        heading: 'Your Inputs',
+        rows: [
+          { label: committedAName, value: formatLongDate(committedA, isApproximate) },
+          { label: committedBName, value: formatLongDate(committedB, isApproximate) },
+        ],
+        variant: 'input',
+      },
+    ];
+
+    return {
+      title: 'Age Difference Result',
+      headlineValue: `${result.gap.years}y ${result.gap.months}m ${result.gap.days}d`,
+      headlineLabel: `${olderName} is older than ${youngerName}`,
+      accentColor: ACCENT.hex,
+      meta: [`As of ${formatShortDate(liveNow, false)}`],
+      sections,
+      pdfOnlySections,
+      imageSections: sections,
+      disclaimer: 'For informational and entertainment purposes only.',
+      fileNameBase: 'age-difference-result',
+    };
+  }, [result, committedA, committedB, committedAName, committedBName, olderName, youngerName, isApproximate, generationCompare, zodiacCompare, liveNow]);
+
+  // The live clock re-creates `report` every tick; only notify the page when its content
+  // actually changes (e.g. an age rolls over) so the whole page isn't re-rendered each second.
+  const reportJson = useMemo(() => (report ? JSON.stringify(report) : ''), [report]);
   useEffect(() => {
     if (!onReportChange) return;
-    if (!result) { onReportChange(null); return; }
-    onReportChange({
-      title: 'Age Difference Result',
-      subtitle: `${olderName} is ${formatAgeGap(result.gap)} older than ${youngerName}`,
-      stats: [
-        { label: `${olderName}'s age`, value: `${result.olderIsPersonA ? result.personA.currentAge.years : result.personB.currentAge.years} years` },
-        { label: `${youngerName}'s age`, value: `${result.olderIsPersonA ? result.personB.currentAge.years : result.personA.currentAge.years} years` },
-        { label: 'Total days apart', value: formatWithCommas(result.gap.totalDays) },
-      ],
-    } as unknown as ShareableReport);
-  }, [result, olderName, youngerName, onReportChange]);
+    onReportChange(reportJson ? (JSON.parse(reportJson) as ShareableReport) : null);
+  }, [reportJson, onReportChange]);
 
   const toggleSources = () => {
     setShowSources((prev) => {

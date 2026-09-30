@@ -11,6 +11,7 @@ import WHRCalculator from "./WHRCalculator";
 import ChronologicalAgeCalculator from "./ChronologicalAgeCalculator";
 import BirthdayCalculator from "./BirthdayCalculator";
 import AgeDifferenceCalculator from "./AgeDifferenceCalculator";
+import ReverseBMICalculator from "./ReverseBMICalculator";
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
@@ -31,6 +32,10 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "bmi":
     case "bmi-calculator":
         return <BMICalculator {...props} />;
+
+    case "reverse-bmi-calculator":
+    case "reverse-bmi":
+        return <ReverseBMICalculator {...props} />;
 
     case "bmr":
     case "bmr-calculator":

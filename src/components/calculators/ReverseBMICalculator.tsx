@@ -610,8 +610,8 @@ const KG_TO_LB = 2.20462;
 const CM_PER_INCH = 2.54;
 
 const MODE_OPTIONS: { value: ReverseMode; label: string }[] = [
-  { value: 'weight', label: 'Weight for a BMI' },
-  { value: 'height', label: 'Height for a BMI' },
+  { value: 'weight', label: 'Weight' },
+  { value: 'height', label: 'Height' },
 ];
 
 // All result values are kept in the unit the person entered (kg/cm or lbs/in),
@@ -1512,26 +1512,26 @@ const ReverseBMICalculator: React.FC<ReverseBMICalculatorProps> = ({ onCalculati
             Built for adults (20 and over). It does not apply to children or teenagers.
           </p>
 
-          {/* Solve-for + calculation standard */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            <div className="sm:col-span-2">
+          {/* Solve-for + calculation standard (side by side from sm up) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
               <div className={fieldLabelRowClass}>
-                <span className={fieldLabelClass}>What Do You Want to Find?</span>
+                <span className={fieldLabelClass}>Target Output</span>
                 <InfoTip
                   widthClass="w-64"
-                  text="Pick the number you are looking for. Choose weight if you know your height, or height if you know your weight. You also enter the BMI you want to work from."
+                  text="Choose the value to calculate. Select Weight if you know your height, or Height if you know your weight. You also enter a target BMI."
                 />
               </div>
               <SegmentedToggle
                 groupId="reverse-bmi-mode"
-                ariaLabel="What do you want to find"
+                ariaLabel="Target output"
                 value={mode}
                 onChange={(v) => { setMode(v as ReverseMode); resetCalculation(); }}
                 options={MODE_OPTIONS}
               />
             </div>
 
-            <div className="sm:col-span-2">
+            <div>
               <div className={fieldLabelRowClass}>
                 <span className={fieldLabelClass}>Calculation Standard</span>
                 <InfoTip

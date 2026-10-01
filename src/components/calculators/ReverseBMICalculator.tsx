@@ -1516,7 +1516,7 @@ const ReverseBMICalculator: React.FC<ReverseBMICalculatorProps> = ({ onCalculati
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <div className={fieldLabelRowClass}>
-                <span className={fieldLabelClass}>Target Output</span>
+                <span className={fieldLabelClass}>What to Calculate</span>
                 <InfoTip
                   widthClass="w-64"
                   text="Choose the value to calculate. Select Weight if you know your height, or Height if you know your weight. You also enter a target BMI."
@@ -1524,7 +1524,7 @@ const ReverseBMICalculator: React.FC<ReverseBMICalculatorProps> = ({ onCalculati
               </div>
               <SegmentedToggle
                 groupId="reverse-bmi-mode"
-                ariaLabel="Target output"
+                ariaLabel="What to Calculate"
                 value={mode}
                 onChange={(v) => { setMode(v as ReverseMode); resetCalculation(); }}
                 options={MODE_OPTIONS}

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { FiTool } from "react-icons/fi"; // Import the specific icon used in the old fallback
 import SafeIcon from "@/components/common/SafeIcon";
 import EMICalculator from "./EMICalculator";
@@ -12,6 +13,29 @@ import ChronologicalAgeCalculator from "./ChronologicalAgeCalculator";
 import BirthdayCalculator from "./BirthdayCalculator";
 import AgeDifferenceCalculator from "./AgeDifferenceCalculator";
 import ReverseBMICalculator from "./ReverseBMICalculator";
+import type { MortgagePreset } from "./MortgageCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
+
+// Mortgage is the largest calculator (schedule, charts, compare panel), so it is code-split.
+// The calculator UI is not SEO content (description/FAQ come from the CMS), so a plain skeleton is fine.
+const MortgageCalculator = dynamic(() => import("./MortgageCalculator"), {
+  loading: () => (
+    <div className="p-10 text-center text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
+      Loading calculator…
+    </div>
+  ),
+});
+
+// Landing-page presets for Mortgage aliases. A preset only changes the STARTING state.
+// Same component for every alias; never fork it (see the Age Difference note below).
+const MORTGAGE_PRESETS: Record<string, MortgagePreset> = {
+  "mortgage-calculator-with-extra-payments": { region: "US", extraMonthly: 200, openExtras: true },
+  "mortgage-payoff-calculator": { region: "US", openExtras: true },
+  "biweekly-mortgage-calculator": { region: "US" }, // the Compare panel shows both biweekly types
+  "mortgage-pmi-calculator": { region: "US", openCosts: true }, // PMI field lives in Taxes & costs
+  "canadian-mortgage-calculator": { region: "CA" },
+  "home-loan-emi-calculator": { region: "IN", termYears: 20 },
+  "15-vs-30-year-mortgage-calculator": { region: "US", termYears: 15 },
+};
 
 // --- PLACEHOLDERS (To be replaced in Phase 1) ---
 // We keep these simple for now, but they will be fully implemented later.
@@ -52,6 +76,18 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "waist-to-hip-ratio":
     case "waist-to-hip-ratio-calculator":
         return <WHRCalculator {...props} />;
+
+    case "mortgage":
+    case "mortgage-calculator":
+    // Long-tail SEO aliases: same component, preset above, H1/meta/FAQ from the CMS.
+    case "mortgage-calculator-with-extra-payments":
+    case "mortgage-payoff-calculator":
+    case "biweekly-mortgage-calculator":
+    case "mortgage-pmi-calculator":
+    case "canadian-mortgage-calculator":
+    case "home-loan-emi-calculator":
+    case "15-vs-30-year-mortgage-calculator":
+        return <MortgageCalculator {...props} preset={MORTGAGE_PRESETS[normalizedKey]} />;
 
     case "sip": 
     case "sip-calculator":

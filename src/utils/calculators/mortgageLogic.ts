@@ -1,3 +1,4 @@
+
 /**
  * mortgageLogic.ts
  * Calculox Mortgage Calculator: pure calculation engine (no React, no I/O).
@@ -971,7 +972,7 @@ export function compareStrategies(
 
 // ---------------------------------------------------------------------------
 // Sources (shown in the UI "Sources" accordion).
-// status "verified"   : the URL was opened and the claim checked on 1 Oct 2026.
+// status "verified"   : the URL was opened and the claim checked on 15 Oct 2026.
 // status "to-verify"  : confirm the link/wording before publishing.
 // ---------------------------------------------------------------------------
 
@@ -986,39 +987,39 @@ export interface MortgageSource {
 export const MORTGAGE_SOURCES: MortgageSource[] = [
   {
     id: "amortization-formula",
-    title: "Standard loan amortisation formula",
-    url: "",
-    note: "Public-domain maths: M = P*r*(1+r)^n / ((1+r)^n - 1). No source link needed.",
+    title: "CFPB, Regulation Z Appendix J: the actuarial method",
+    url: "https://www.consumerfinance.gov/rules-policy/regulations/1026/J/",
+    note: "US federal rule that describes how a loan balance works over time. Each period, interest is added to the balance and the payment is taken off. A level payment is the amount that brings the balance to zero by the last period.",
     status: "verified",
   },
   {
     id: "cfpb-pmi",
     title: "CFPB: When can I remove private mortgage insurance (PMI) from my loan?",
     url: "https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/",
-    note: "Request cancellation at 80% of original value (earlier with extra payments); automatic termination when scheduled to reach 78%.",
+    note: "Plain-language guidance from the US Consumer Financial Protection Bureau on when you can ask to end PMI and when it ends automatically.",
     status: "verified",
   },
   {
     id: "hpa-1998",
     title: "Homeowners Protection Act of 1998 (Public Law 105-216)",
-    url: "https://www.govinfo.gov/app/details/PLAW-105publ216",
-    note: "US law behind the 80% / 78% PMI rules. Confirm wording again when writing the page copy.",
-    status: "to-verify",
+    url: "https://www.govinfo.gov/content/pkg/PLAW-105publ216/html/PLAW-105publ216.htm",
+    note: "US federal law behind the PMI timeline. You can ask to cancel PMI at 80% of the original value, and it ends automatically at 78%. The Act also ends PMI at the midpoint of the original term if you are current.",
+    status: "verified",
   },
   {
     id: "canada-semi-annual",
-    title: "Canadian fixed-rate mortgages: interest compounded semi-annually, not in advance",
-    url: "https://www.rbcroyalbank.com/mortgages/_assets-custom/terms.html",
-    note: "Lender disclosures describe fixed-rate interest as compounded semi-annually, not in advance. Add a government explanation (e.g. Interest Act, s. 6, or FCAC) before publishing.",
-    status: "to-verify",
+    title: "Interest Act (Canada), section 6: interest on mortgages with blended payments",
+    url: "https://laws-lois.justice.gc.ca/eng/acts/I-15/FullText.html",
+    note: "The Act requires such a mortgage to state its rate calculated yearly or half-yearly, not in advance. Canadian fixed-rate mortgages are commonly quoted with semi-annual compounding, which is the method used here. Your lender's disclosure shows the method that applies to your loan.",
+    status: "verified",
   },
   {
     id: "india-prepayment",
-    title: "RBI guidance on prepayment charges for floating-rate loans (India)",
-    url: "",
-    note: "Find the current RBI direction and link it before stating anything about prepayment penalties.",
-    status: "to-verify",
+    title: "RBI (Pre-payment Charges on Loans) Directions, 2025",
+    url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12878",
+    note: "Reserve Bank of India directions dated 2 July 2025 (RBI/2025-26/64). For loans sanctioned or renewed on or after 1 January 2026, lenders cannot charge prepayment fees on floating-rate loans to individuals for non-business purposes. Fixed-rate and older loans can differ, so check your sanction letter.",
+    status: "verified",
   },
 ];
 
-export const MORTGAGE_LAST_REVIEWED = "2026-10-01";
+export const MORTGAGE_LAST_REVIEWED = "2026-10-15";

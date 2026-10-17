@@ -1,10 +1,9 @@
-
 /**
  * mortgageLogic.ts
  * Calculox Mortgage Calculator: pure calculation engine (no React, no I/O).
  *
- * PROVENANCE: every formula here is standard public-domain loan maths.
- * No competitor text, layout or code is reused. Every rule that depends on a
+ * PROVENANCE: every formula here is standard loan mathematics (formulas are not
+ * subject to copyright). No third-party text, layout or code is reused. Every rule that depends on a
  * law or convention carries a source comment and an entry in MORTGAGE_SOURCES.
  *
  * Money is rounded to cents each period (payment, interest, costs).
@@ -322,6 +321,8 @@ export const MAX_RATE_PCT = 30;
 /** 40 years x 26 biweekly periods. The UI should still show yearly rows first. */
 export const MAX_SCHEDULE_ROWS = 1040;
 const MAX_HOME_PRICE = 1e12;
+/** Smallest loan the calculator will model (guards against a loan that rounds to zero). */
+const MIN_LOAN_AMOUNT = 1;
 
 // ---------------------------------------------------------------------------
 // Small maths helpers (exported so tests and the UI can reuse them)
@@ -403,7 +404,7 @@ function checkAmount(
   if (!isNum(a.value) || a.value < 0) {
     errors[key] = `${label} must be zero or more.`;
   } else if (a.mode === "percent" && a.value > maxPercent) {
-    errors[key] = `${label} cannot be more than ${maxPercent}%.`;
+    errors[key] = `${label}: this calculator supports up to ${maxPercent}%.`;
   }
 }
 
@@ -424,22 +425,25 @@ export function validateMortgageInputs(input: MortgageInputs): ValidationResult 
   if (!dp || !isNum(dp.value) || dp.value < 0) {
     errors.downPayment = "Down payment must be zero or more.";
   } else if (isNum(input.homePrice) && input.homePrice > 0) {
-    const downAmt = dp.mode === "percent" ? (input.homePrice * dp.value) / 100 : dp.value;
+    // Round exactly as normalise() does, so a value that rounds up to the full price is caught here.
+    const downAmt = roundCents(dp.mode === "percent" ? (input.homePrice * dp.value) / 100 : dp.value);
     if (downAmt >= input.homePrice) {
       errors.downPayment = "Down payment must be less than the home price.";
+    } else if (roundCents(input.homePrice - downAmt) < MIN_LOAN_AMOUNT) {
+      errors.downPayment = `Down payment must leave a loan of at least ${MIN_LOAN_AMOUNT}.`;
     }
   }
 
   if (!isNum(input.annualRatePct) || input.annualRatePct < 0 || input.annualRatePct > MAX_RATE_PCT) {
-    errors.annualRatePct = `Interest rate must be between 0% and ${MAX_RATE_PCT}%.`;
+    errors.annualRatePct = `This calculator supports interest rates from 0% to ${MAX_RATE_PCT}%.`;
   }
 
   if (!isNum(input.termYears) || input.termYears < 1) {
     errors.termYears = "Loan term must be at least 1 year.";
   } else if (input.termYears > profile.maxTermYears) {
-    errors.termYears = `Loan term cannot be more than ${profile.maxTermYears} years for ${profile.label}.`;
+    errors.termYears = `This calculator supports terms up to ${profile.maxTermYears} years for ${profile.label}.`;
   } else if (Math.round(input.termYears * k) > MAX_SCHEDULE_ROWS) {
-    errors.termYears = "Loan term is too long for this payment frequency.";
+    errors.termYears = "This calculator does not support a term this long with this payment frequency.";
   }
 
   if (!Number.isInteger(input.startMonth) || input.startMonth < 1 || input.startMonth > 12) {
@@ -460,7 +464,7 @@ export function validateMortgageInputs(input: MortgageInputs): ValidationResult 
       for (const key of ["propertyTax", "insurance", "hoa", "other"] as const) {
         const v = inc[key];
         if (v !== undefined && (!isNum(v) || v < 0 || v > 50)) {
-          errors[`${key}Increase`] = "Yearly increase must be between 0% and 50%.";
+          errors[`${key}Increase`] = "This calculator supports yearly increases from 0% to 50%.";
         }
       }
     }
@@ -483,6 +487,9 @@ export function validateMortgageInputs(input: MortgageInputs): ValidationResult 
       if (!Number.isInteger(ex.yearly.calendarMonth) || ex.yearly.calendarMonth < 1 || ex.yearly.calendarMonth > 12) {
         errors.extraYearly = "Choose a month for the yearly extra payment.";
       }
+      if (ex.yearly.fromMonth !== undefined && (!Number.isInteger(ex.yearly.fromMonth) || ex.yearly.fromMonth < 1)) {
+        errors.extraYearly = "Extra payment start month must be 1 or more.";
+      }
     }
     if (ex.oneTime) {
       for (const o of ex.oneTime) {
@@ -500,7 +507,7 @@ export function validateMortgageInputs(input: MortgageInputs): ValidationResult 
     if (!Number.isInteger(rc.atMonth) || rc.atMonth < 2 || rc.atMonth > termMonths) {
       errors.rateChange = "Rate change month must be within the loan term (month 2 or later).";
     } else if (!isNum(rc.newAnnualRatePct) || rc.newAnnualRatePct < 0 || rc.newAnnualRatePct > MAX_RATE_PCT) {
-      errors.rateChange = `New rate must be between 0% and ${MAX_RATE_PCT}%.`;
+      errors.rateChange = `This calculator supports new rates from 0% to ${MAX_RATE_PCT}%.`;
     }
   }
   if (input.recast) {
@@ -731,6 +738,7 @@ export function calculateMortgage(input: MortgageInputs): MortgageResult {
   //   - Borrower may request cancellation when the balance is scheduled to reach 80% of ORIGINAL value
   //     (earlier if extra payments bring it there).
   //   - Servicer must terminate automatically when the balance is SCHEDULED to reach 78%.
+  //   - Final termination at the midpoint of the original term, if the borrower is current.
   const ltvPct = (n.loan / n.homePrice) * 100;
   const pmiRequested = !!input.pmi && resolveAnnual(input.pmi.annualCost, n.loan) > 0;
   if (pmiRequested && !profile.supportsPmi) {
@@ -749,6 +757,14 @@ export function calculateMortgage(input: MortgageInputs): MortgageResult {
     month78Scheduled = firstMonthAtOrBelow(original.rows, 0.78 * n.homePrice);
     const dropAt = input.pmi?.dropAt ?? "request80";
     pmiThrough = dropAt === "auto78" ? month78Scheduled : month80;
+    // HPA final termination: PMI must end by the midpoint of the ORIGINAL term
+    // (12 U.S.C. 4902(c); see MORTGAGE_SOURCES: hpa-1998, cfpb-pmi). It applies whichever
+    // rule is chosen above, so PMI never runs past the midpoint month.
+    const midpointMonth = Math.round((input.termYears * 12) / 2);
+    pmiThrough = pmiThrough === null ? midpointMonth : Math.min(pmiThrough, midpointMonth);
+    // PMI cannot be charged after the loan is paid off (extra payments / lump sums).
+    const lastActualMonth = rows.length > 0 ? rows[rows.length - 1].month : null;
+    if (lastActualMonth !== null) pmiThrough = Math.min(pmiThrough, lastActualMonth);
   }
 
   // ---- Recurring costs per period ----
@@ -898,6 +914,12 @@ export function calculateMortgage(input: MortgageInputs): MortgageResult {
 // Public: strategy comparison (principal & interest only)
 // ---------------------------------------------------------------------------
 
+/** Default recast month: five years in, but never later than the middle of a short loan. */
+export function defaultRecastMonth(termYears: number): number {
+  const termMonths = Math.round(termYears * 12);
+  return Math.min(60, Math.max(2, Math.floor(termMonths / 2)));
+}
+
 export function compareStrategies(
   input: MortgageInputs,
   options: StrategyCompareOptions = {}
@@ -939,7 +961,7 @@ export function compareStrategies(
 
   if ((options.extraMonthly ?? 0) > 0) {
     const r = calculateMortgage({ ...clean, extras: { monthly: { amount: options.extraMonthly as number } } });
-    push("extra-monthly", "Extra payment every month", r, r.scheduledPayment + (options.extraMonthly as number),
+    push("extra-monthly", "Extra payment every month", r, roundCents(r.scheduledPayment + (options.extraMonthly as number)),
       "Regular payment plus the extra amount, every month.");
   }
 
@@ -961,10 +983,10 @@ export function compareStrategies(
   if ((options.recastLump ?? 0) > 0) {
     const r = calculateMortgage({
       ...clean,
-      recast: { atMonth: options.recastAtMonth ?? 60, amount: options.recastLump as number },
+      recast: { atMonth: options.recastAtMonth ?? defaultRecastMonth(input.termYears), amount: options.recastLump as number },
     });
     push("recast", "Lump sum + recast", r, r.events.recast?.newPayment ?? r.scheduledPayment,
-      "Payment drops after the lump sum; payoff date stays the same. FHA, VA and USDA loans generally cannot be recast.");
+      "Payment drops after the lump sum; payoff date stays the same. Not every loan type allows a recast, so ask your servicer.");
   }
 
   return out;
@@ -972,7 +994,7 @@ export function compareStrategies(
 
 // ---------------------------------------------------------------------------
 // Sources (shown in the UI "Sources" accordion).
-// status "verified"   : the URL was opened and the claim checked on 15 Oct 2026.
+// status "verified"   : the URL and claim were checked on 17 Oct 2026.
 // status "to-verify"  : confirm the link/wording before publishing.
 // ---------------------------------------------------------------------------
 
@@ -989,37 +1011,65 @@ export const MORTGAGE_SOURCES: MortgageSource[] = [
     id: "amortization-formula",
     title: "CFPB, Regulation Z Appendix J: the actuarial method",
     url: "https://www.consumerfinance.gov/rules-policy/regulations/1026/J/",
-    note: "US federal rule that describes how a loan balance works over time. Each period, interest is added to the balance and the payment is taken off. A level payment is the amount that brings the balance to zero by the last period.",
+    note: "US federal rule that sets out the actuarial method: each period the balance is increased by interest and reduced by the payment made. This calculator applies the same step-by-step approach and uses the standard level-payment formula, the payment that brings the balance to zero at the end of the term.",
     status: "verified",
   },
   {
     id: "cfpb-pmi",
     title: "CFPB: When can I remove private mortgage insurance (PMI) from my loan?",
     url: "https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/",
-    note: "Plain-language guidance from the US Consumer Financial Protection Bureau on when you can ask to end PMI and when it ends automatically.",
+    note: "Plain-language guidance from the US Consumer Financial Protection Bureau on when you can ask to end PMI, when it ends automatically and when it must end at the midpoint of the loan. FHA and VA loans and lender-paid insurance follow different rules.",
     status: "verified",
   },
   {
     id: "hpa-1998",
     title: "Homeowners Protection Act of 1998 (Public Law 105-216)",
     url: "https://www.govinfo.gov/content/pkg/PLAW-105publ216/html/PLAW-105publ216.htm",
-    note: "US federal law behind the PMI timeline. You can ask to cancel PMI at 80% of the original value, and it ends automatically at 78%. The Act also ends PMI at the midpoint of the original term if you are current.",
+    note: "US federal law behind the PMI timeline. You may ask to cancel at 80% of the original value, the lender must end PMI when the schedule first reaches 78%, and PMI must end at the midpoint of the amortization period. Conditions apply, such as being current on payments.",
     status: "verified",
   },
   {
     id: "canada-semi-annual",
     title: "Interest Act (Canada), section 6: interest on mortgages with blended payments",
-    url: "https://laws-lois.justice.gc.ca/eng/acts/I-15/FullText.html",
-    note: "The Act requires such a mortgage to state its rate calculated yearly or half-yearly, not in advance. Canadian fixed-rate mortgages are commonly quoted with semi-annual compounding, which is the method used here. Your lender's disclosure shows the method that applies to your loan.",
+    url: "https://laws-lois.justice.gc.ca/eng/acts/I-15/section-6.html",
+    note: "Canadian federal law on mortgage interest. For blended-payment mortgages the rate must be stated as calculated yearly or half-yearly, not in advance. Canadian fixed-rate mortgages are conventionally quoted with semi-annual compounding, which is the method used here; the Act does not spell that out. Variable-rate loans may compound differently, so check your lender's disclosure.",
+    status: "verified",
+  },
+  {
+    id: "canada-payment-frequency",
+    title: "FCAC: Mortgage payment options (Financial Consumer Agency of Canada)",
+    url: "https://www.canada.ca/en/financial-consumer-agency/services/financial-toolkit/mortgages/mortgages-2/15.html",
+    note: "Canadian government guide that defines the biweekly options used here: biweekly is a payment every two weeks, and accelerated biweekly is half the monthly payment every two weeks, which adds up to one extra monthly payment a year.",
+    status: "verified",
+  },
+  {
+    id: "cfpb-piti",
+    title: "CFPB: What's the difference between my principal and interest payment and my total monthly payment?",
+    url: "https://www.consumerfinance.gov/ask-cfpb/on-a-mortgage-whats-the-difference-between-my-principal-and-interest-payment-and-my-total-monthly-payment-en-1941/",
+    note: "Explains that the total monthly payment is principal and interest plus mortgage insurance (if any) and escrow items such as homeowners insurance and property tax. HOA fees are not covered on this page; they are added here as a separate cost.",
+    status: "verified",
+  },
+  {
+    id: "fannie-mae-recast",
+    title: "Fannie Mae: Re-amortized (Recast) Mortgages",
+    url: "https://singlefamily.fanniemae.com/job-aid/loan-delivery/topic/recast_mortgage.htm",
+    note: "Industry definition of a recast: after a substantial principal payment, the monthly payment is recalculated over the remaining loan term. Fannie Mae is a government-sponsored enterprise, not a government agency.",
+    status: "verified",
+  },
+  {
+    id: "india-emi-reset",
+    title: "RBI: Reset of Floating Interest Rate on EMI-based Personal Loans (RBI/2023-24/55)",
+    url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12529",
+    note: "Reserve Bank of India circular of 18 August 2023, as updated on 1 October 2025, on resets of floating rates for EMI-based personal loans, where a reset can lengthen the tenor or raise the EMI. It does not define the EMI formula and is written for personal loans, so check how it applies to your housing loan.",
     status: "verified",
   },
   {
     id: "india-prepayment",
     title: "RBI (Pre-payment Charges on Loans) Directions, 2025",
     url: "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12878",
-    note: "Reserve Bank of India directions dated 2 July 2025 (RBI/2025-26/64). For loans sanctioned or renewed on or after 1 January 2026, lenders cannot charge prepayment fees on floating-rate loans to individuals for non-business purposes. Fixed-rate and older loans can differ, so check your sanction letter.",
+    note: "Reserve Bank of India directions dated 2 July 2025 (RBI/2025-26/64). For loans sanctioned or renewed on or after 1 January 2026, lenders cannot charge prepayment fees on floating-rate loans to individuals for non-business purposes. Fixed-rate loans can differ, so check your sanction letter. Earlier loans follow the rules in force when they were sanctioned.",
     status: "verified",
   },
 ];
 
-export const MORTGAGE_LAST_REVIEWED = "2026-10-15";
+export const MORTGAGE_LAST_REVIEWED = "2026-10-17";

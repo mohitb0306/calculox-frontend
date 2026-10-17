@@ -14,6 +14,7 @@ import {
   REGION_PROFILES,
   MORTGAGE_SOURCES,
   MORTGAGE_LAST_REVIEWED,
+  defaultRecastMonth,
 } from '@/utils/calculators/mortgageLogic';
 import type {
   MortgageInputs,
@@ -931,21 +932,21 @@ const MGR_CSS = `
 .mgr-cp__card { --cp-text: #475569; }
 .dark .mgr-cp__card { --cp-text: #cbd5e1; }
 .mgr-cp__card[data-id="extra-monthly"] { --cp-text: #047857; }
-.mgr-cp__card[data-id="biweekly-half"] { --cp-text: #4338ca; }
-.mgr-cp__card[data-id="biweekly-true"] { --cp-text: #6d28d9; }
+.mgr-cp__card[data-id="accelerated-biweekly"] { --cp-text: #4338ca; }
+.mgr-cp__card[data-id="true-biweekly"] { --cp-text: #6d28d9; }
 .mgr-cp__card[data-id="shorter-term"]  { --cp-text: #b45309; }
 .mgr-cp__card[data-id="recast"]        { --cp-text: #0369a1; }
 .dark .mgr-cp__card[data-id="extra-monthly"] { --cp-text: #6ee7b7; }
-.dark .mgr-cp__card[data-id="biweekly-half"] { --cp-text: #a5b4fc; }
-.dark .mgr-cp__card[data-id="biweekly-true"] { --cp-text: #c4b5fd; }
+.dark .mgr-cp__card[data-id="accelerated-biweekly"] { --cp-text: #a5b4fc; }
+.dark .mgr-cp__card[data-id="true-biweekly"] { --cp-text: #c4b5fd; }
 .dark .mgr-cp__card[data-id="shorter-term"]  { --cp-text: #fcd34d; }
 .dark .mgr-cp__card[data-id="recast"]        { --cp-text: #7dd3fc; }
 
 /* Accent colour per strategy — set on each card via inline style */
 .mgr-cp__card[data-id="standard"]         { --cp-accent: #94a3b8; --cp-accent-rgb: 148,163,184; --cp-accent-dark: #64748b; }
 .mgr-cp__card[data-id="extra-monthly"]     { --cp-accent: #10b981; --cp-accent-rgb: 16,185,129;  --cp-accent-dark: #047857; }
-.mgr-cp__card[data-id="biweekly-half"]     { --cp-accent: #6366f1; --cp-accent-rgb: 99,102,241;  --cp-accent-dark: #4f46e5; }
-.mgr-cp__card[data-id="biweekly-true"]     { --cp-accent: #8b5cf6; --cp-accent-rgb: 139,92,246;  --cp-accent-dark: #7c3aed; }
+.mgr-cp__card[data-id="accelerated-biweekly"]     { --cp-accent: #6366f1; --cp-accent-rgb: 99,102,241;  --cp-accent-dark: #4f46e5; }
+.mgr-cp__card[data-id="true-biweekly"]     { --cp-accent: #8b5cf6; --cp-accent-rgb: 139,92,246;  --cp-accent-dark: #7c3aed; }
 .mgr-cp__card[data-id="shorter-term"]      { --cp-accent: #f59e0b; --cp-accent-rgb: 245,158,11;  --cp-accent-dark: #b45309; }
 .mgr-cp__card[data-id="recast"]            { --cp-accent: #0ea5e9; --cp-accent-rgb: 14,165,233;  --cp-accent-dark: #0369a1; }
 
@@ -3037,7 +3038,7 @@ const ComparePanel: React.FC<{ inputs: MortgageInputs; options: CompareOptions }
   const used: string[] = [];
   if (options.extraMonthly) used.push(`${fmt0(options.extraMonthly)} extra every month`);
   if (options.shorterTermYears && options.shorterTermYears < inputs.termYears) used.push(`${options.shorterTermYears}-year term`);
-  if (options.recastLump) used.push(`${fmt0(options.recastLump)} lump sum + recast in ${loanMonthLabel(inputs.startYear, inputs.startMonth, options.recastAtMonth ?? 60, loc)}`);
+  if (options.recastLump) used.push(`${fmt0(options.recastLump)} lump sum + recast in ${loanMonthLabel(inputs.startYear, inputs.startMonth, options.recastAtMonth ?? defaultRecastMonth(inputs.termYears), loc)}`);
 
   // Max interest saved across non-baseline strategies — used to size the mini progress bar.
   const maxSaved = outcomes.reduce((m, o) => (o.id !== 'standard' && o.interestSaved > m ? o.interestSaved : m), 0);
@@ -3130,49 +3131,20 @@ const ComparePanel: React.FC<{ inputs: MortgageInputs; options: CompareOptions }
 };
 
 // --- SOURCES ---
-// The engine's MORTGAGE_SOURCES list is the base. The entries below replace its text and links with checked ones,
-// so every link points to an official government page and every note is written in our own words.
-// (Optional later: copy these entries back into mortgageLogic.ts and delete this override map.)
-const SOURCE_OVERRIDES: Record<string, Partial<MortgageSource>> = {
-  'amortization-formula': {
-    title: 'CFPB, Regulation Z Appendix J: the actuarial method',
-    url: 'https://www.consumerfinance.gov/rules-policy/regulations/1026/J/',
-    note: 'US federal rule that describes how a loan balance works over time. Each period, interest is added to the balance and the payment is taken off. A level payment is the amount that brings the balance to zero by the last period.',
-    status: 'verified',
-  },
-  'cfpb-pmi': {
-    title: 'CFPB: When can I remove private mortgage insurance (PMI) from my loan?',
-    url: 'https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/',
-    note: 'Plain-language guidance from the US Consumer Financial Protection Bureau on when you can ask to end PMI and when it ends automatically.',
-    status: 'verified',
-  },
-  'hpa-1998': {
-    title: 'Homeowners Protection Act of 1998 (Public Law 105-216)',
-    url: 'https://www.govinfo.gov/content/pkg/PLAW-105publ216/html/PLAW-105publ216.htm',
-    note: 'US federal law behind the PMI timeline. You can ask to cancel PMI at 80% of the original value, and it ends automatically at 78%. The Act also ends PMI at the midpoint of the original term if you are current.',
-    status: 'verified',
-  },
-  'canada-semi-annual': {
-    title: 'Interest Act (Canada), section 6: interest on mortgages with blended payments',
-    url: 'https://laws-lois.justice.gc.ca/eng/acts/I-15/FullText.html',
-    note: 'The Act requires such a mortgage to state its rate calculated yearly or half-yearly, not in advance. Canadian fixed-rate mortgages are commonly quoted with semi-annual compounding, which is the method used here. Your lender\'s disclosure shows the method that applies to your loan.',
-    status: 'verified',
-  },
-  'india-prepayment': {
-    title: 'RBI (Pre-payment Charges on Loans) Directions, 2025',
-    url: 'https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=12878',
-    note: 'Reserve Bank of India directions dated 2 July 2025 (RBI/2025-26/64). For loans sanctioned or renewed on or after 1 January 2026, lenders cannot charge prepayment fees on floating-rate loans to individuals for non-business purposes. Fixed-rate and older loans can differ, so check your sanction letter.',
-    status: 'verified',
-  },
-};
+// MORTGAGE_SOURCES in mortgageLogic.ts is the single source of truth for source titles, links and notes.
+// Most links go to official government or regulator pages; one (Fannie Mae, for recasts) does not.
 const SOURCE_REGION_TAG: Record<string, string> = {
   'amortization-formula': 'All regions',
   'cfpb-pmi': 'US',
   'hpa-1998': 'US',
   'canada-semi-annual': 'Canada',
+  'canada-payment-frequency': 'Canada',
+  'cfpb-piti': 'US',
+  'fannie-mae-recast': 'US',
+  'india-emi-reset': 'India',
   'india-prepayment': 'India',
 };
-const DISPLAY_SOURCES: MortgageSource[] = MORTGAGE_SOURCES.map((src) => ({ ...src, ...(SOURCE_OVERRIDES[src.id] ?? {}) }));
+const DISPLAY_SOURCES: MortgageSource[] = MORTGAGE_SOURCES;
 
 const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
   preset,
@@ -3225,7 +3197,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
   // Compare options: only feed the Compare section of the results (never the main result).
   const [cmpShorter, setCmpShorter] = useState<string>('');
   const [cmpRecast, setCmpRecast] = useState<string>('');
-  const [cmpRecastAt, setCmpRecastAt] = useState<MonthYear | null>(null); // null = payment month 60
+  const [cmpRecastAt, setCmpRecastAt] = useState<MonthYear | null>(null); // null = default recast month (month 60, or halfway for short loans)
   const oneTimeId = useRef<number>(1);
   const [extrasOpen, setExtrasOpen] = useState<boolean>(() => !!preset?.openExtras || !!(preset?.extraMonthly && preset.extraMonthly > 0));
 
@@ -3259,8 +3231,10 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
     return (y - startYearInt) * 12 + (r.month - startMonth) + 1;
   };
   const loanMonthOf = (v: MonthYear | null): number => monthIndexOf(resolveYM(v));
-  // Recast date: unless the user picks one, it sits at payment month 60 (five years in).
-  const DEFAULT_RECAST_MONTH = 60;
+  // Recast date: unless the user picks one, it sits at payment month 60 (five years in),
+  // or halfway through the loan if the loan is shorter than ten years.
+  const termYearsNum = parseNum(term);
+  const DEFAULT_RECAST_MONTH = termYearsNum > 0 ? defaultRecastMonth(termYearsNum) : 60;
   const ymOfLoanMonth = (n: number): MonthYear => {
     if (!Number.isFinite(startYearInt)) return { month: startMonth, year: startYear };
     const idx = startMonth - 1 + (n - 1);
@@ -3624,7 +3598,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
         { heading: 'Your Inputs', rows: inputRows, variant: 'input' },
         { heading: 'Year-by-Year Summary', rows: yearRows, variant: 'output' },
       ],
-      disclaimer: 'Estimates for planning only, not financial advice or a lender quote. Real payments depend on your lender\'s terms, rounding and fees.',
+      disclaimer: 'Estimates for general information only. Not financial, legal or tax advice, or a loan offer. Actual payments depend on your lender\'s terms, fees, taxes, insurance and rounding. Confirm with your lender or a qualified adviser.',
       fileNameBase: `mortgage-${inputs.region.toLowerCase()}-${Math.round(r.scheduledPayment)}`,
     };
   }, [committed]);
@@ -4036,6 +4010,13 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
               locale={profile.locale}
               modeAriaLabel="Down payment entry type"
               error={errors.downPayment}
+              hint={
+                downPreview && down.trim() !== ''
+                  ? downMode === 'percent'
+                    ? `${money(downPreview.amt)} down, so you borrow ${money(downPreview.loan)}.`
+                    : `${downPreview.pct.toLocaleString(profile.locale, { maximumFractionDigits: 2 })}% of the price, so you borrow ${money(downPreview.loan)}.`
+                  : undefined
+              }
             />
 
             {/* Term */}
@@ -4076,7 +4057,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
               />
               <FieldError id={`${uid}-rate-err`} message={errors.annualRatePct} />
               {!errors.annualRatePct && region === 'CA' && (
-                <p className={hintClass}>Canada is calculated with semi-annual compounding.</p>
+                <p className={hintClass}>Canada is calculated with semi-annual compounding. Variable-rate loans may differ.</p>
               )}
             </div>
 
@@ -4417,6 +4398,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
                                 monthNames={monthNames}
                                 onMonth={(m) => { setOneTimes((prev) => prev.map((x) => (x.id === o.id ? { ...x, when: { month: m, year: resolveYM(x.when).year } } : x))); clearErr('extraOneTime'); setTouched(true); }}
                                 onYear={(y) => { setOneTimes((prev) => prev.map((x) => (x.id === o.id ? { ...x, when: { month: resolveYM(x.when).month, year: y } } : x))); clearErr('extraOneTime'); setTouched(true); }}
+                                error={dateErr(errors.extraOneTime)}
                               />
                             </div>
                             {mNum >= 1 && mNum > termMonths && (
@@ -4469,7 +4451,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
                     <MonthYearField
                       id={`${uid}-cr-at`}
                       label="Recast in"
-                      tip="The month and year the lump sum is paid. If you leave it, it is five years into the loan. FHA, VA and USDA loans generally cannot be recast."
+                      tip="The month and year the lump sum is paid. If you leave it, it is five years into the loan (halfway for a loan shorter than ten years). Not every loan type allows a recast, so ask your servicer."
                       month={resolveRecastYM().month}
                       year={resolveRecastYM().year}
                       monthNames={monthNames}
@@ -4568,7 +4550,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
       {/* DISCLAIMER (always visible) */}
       <div className="text-sm font-medium text-neutral-600 dark:text-neutral-400 space-y-3 mt-5">
         <p className="leading-normal">
-          <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong> Estimates for planning and learning only. This is not financial, legal or tax advice, and not a loan offer or lender quote. The pre-filled rate is an example, not a current rate. Real payments depend on your lender&apos;s terms, rounding, fees and local rules, so please confirm the details with your lender or a qualified adviser.
+          <strong className="text-neutral-900 dark:text-neutral-200">Disclaimer:</strong>{' '}This calculator gives estimates for general information and education only. It is not financial, legal or tax advice, a loan offer or a lender quote. Your actual payments depend on your lender&apos;s terms, fees, taxes, insurance, loan type and rounding, and the rules we model (such as PMI and how interest compounds) are simplified. Please confirm the figures with your lender or a qualified adviser before making any decision.
         </p>
       </div>
 
@@ -4590,7 +4572,7 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
               <SafeIcon icon={FiFileText} className="w-3.5 h-3.5" />
             </div>
             <div className="min-w-0">
-              <span className="block text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources &amp; method</span>
+              <span className="block text-[15px] font-bold text-neutral-900 dark:text-neutral-100 leading-tight">Sources</span>
               <span className="block text-xs font-medium text-neutral-500 dark:text-neutral-500 mt-0.5 leading-snug">
                 {DISPLAY_SOURCES.length} references. Last reviewed {new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${MORTGAGE_LAST_REVIEWED}T00:00:00Z`))}.
               </span>
@@ -4639,16 +4621,21 @@ const MortgageCalculator: React.FC<MortgageCalculatorProps> = ({
             </ol>
             <div className="pt-4 mt-4 border-t border-neutral-200/70 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed space-y-2">
               <p>
-                <strong className="text-neutral-700 dark:text-neutral-300">How it is calculated:</strong> each payment is the standard loan formula applied to your balance.
-                Interest, principal and costs are rounded to the cent every period, and the final payment clears whatever balance is left.
-                Extra payments reduce the balance after the scheduled payment and never go above what is owed.
+                <strong className="text-neutral-700 dark:text-neutral-300">How it is calculated:</strong> each scheduled payment uses the standard level-payment formula,
+                M = P × r × (1+r)ⁿ ÷ ((1+r)ⁿ − 1), where P is the loan amount, r the rate per payment period and n the number of payments (at 0% interest, M = P ÷ n).
+                Each period, interest is added to the balance and the payment is taken off. Amounts are rounded to the cent every period, and the last payment clears the balance.
+                In the US and India, r is the yearly rate divided by payments per year. In Canada, r comes from semi-annual compounding: (1 + yearly rate ÷ 2)^(2 ÷ payments per year) − 1.
+                Extra payments reduce the balance after the scheduled payment.
               </p>
               <p>
-                Biweekly figures use two methods (half the monthly payment, or true biweekly), and lenders handle both in different ways, so treat them as estimates.
-                No live rates are used. Nothing here is a lender listing or a recommendation.
+                <strong className="text-neutral-700 dark:text-neutral-300">Biweekly, recast and PMI:</strong> &quot;half the monthly payment&quot; pays half of the monthly amount every two weeks (26 a year, equal to 13 monthly payments), so the loan ends sooner.
+                &quot;True biweekly&quot; keeps the same term with smaller payments. A recast recalculates the payment over the remaining term after a lump sum.
+                PMI (US only, when you enter a cost) is charged while the loan is above 80% of the home price, ends at 80% on request or 78% automatically, and no later than the midpoint of the term, assuming you are eligible and paying on time.
+                Lenders handle all of these differently, so treat results as estimates.
               </p>
               <p>
-                Links go to official government pages. The notes above are written in our own words, and no text is copied from them.
+                Taxes, insurance, HOA and other costs are the amounts you enter, grown by the yearly increase you choose. No live rates are used, and nothing here is a lender listing or a recommendation.
+                Links go to official government or regulator pages, plus one Fannie Mae reference for recasts. The notes are written in our own words and no source text is copied.
               </p>
             </div>
           </div>

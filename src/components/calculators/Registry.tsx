@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from "react";
@@ -14,6 +15,7 @@ import BirthdayCalculator from "./BirthdayCalculator";
 import AgeDifferenceCalculator from "./AgeDifferenceCalculator";
 import ReverseBMICalculator from "./ReverseBMICalculator";
 import type { MortgagePreset } from "./MortgageCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
+import type { AutoLoanPreset } from "./AutoLoanCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
 
 // Mortgage is the largest calculator (schedule, charts, compare panel), so it is code-split.
 // The calculator UI is not SEO content (description/FAQ come from the CMS), so a plain skeleton is fine.
@@ -24,6 +26,23 @@ const MortgageCalculator = dynamic(() => import("./MortgageCalculator"), {
     </div>
   ),
 });
+
+// Auto Loan is also code-split (charts, schedule, sources panel).
+const AutoLoanCalculator = dynamic(() => import("./AutoLoanCalculator"), {
+  loading: () => (
+    <div className="p-10 text-center text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
+      Loading calculator…
+    </div>
+  ),
+});
+
+// Landing-page presets for Auto Loan aliases (Phase 3 slugs only). A preset only changes the STARTING state;
+// no numbers are pre-filled. Phase 4 slugs are added later.
+const AUTO_LOAN_PRESETS: Record<string, AutoLoanPreset> = {
+  "auto-loan-calculator-with-trade-in": { region: "US", openTradeIn: true },
+  "car-loan-emi-calculator": { region: "IN" },
+  "car-loan-calculator-canada": { region: "CA" },
+};
 
 // Landing-page presets for Mortgage aliases. A preset only changes the STARTING state.
 // Same component for every alias; never fork it (see the Age Difference note below).
@@ -88,6 +107,16 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "home-loan-emi-calculator":
     case "15-vs-30-year-mortgage-calculator":
         return <MortgageCalculator {...props} preset={MORTGAGE_PRESETS[normalizedKey]} />;
+
+    case "auto-loan":
+    case "auto-loan-calculator":
+    case "car-loan-calculator":
+    case "car-payment-calculator":
+    // Long-tail SEO aliases: same component, preset above, H1/meta/FAQ from the CMS.
+    case "auto-loan-calculator-with-trade-in":
+    case "car-loan-emi-calculator":
+    case "car-loan-calculator-canada":
+        return <AutoLoanCalculator {...props} preset={AUTO_LOAN_PRESETS[normalizedKey]} />;
 
     case "sip": 
     case "sip-calculator":

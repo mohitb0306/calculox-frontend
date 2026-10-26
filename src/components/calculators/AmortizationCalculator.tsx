@@ -1595,11 +1595,11 @@ const AmortizationCalculator: React.FC<AmortizationCalculatorProps> = ({
         oneTimeErrs.oneTimeExtra0 = 'Enter the payment number for this payment.';
       }
     }
-    const termErr = termTotalMonths > MAX_TERM_YEARS * 12
+    const termErr: Record<string, string> = termTotalMonths > MAX_TERM_YEARS * 12
       ? { term: `The loan term can be at most ${MAX_TERM_YEARS} years (${MAX_TERM_YEARS * 12} months).` }
       : {};
-    const extraErrs = { ...termErr, ...oneTimeErrs, ...(timingErr ? { recurringExtra0: timingErr } : {}) };
-    const v = Object.keys(extraErrs).length > 0
+    const extraErrs: Record<string, string> = { ...termErr, ...oneTimeErrs, ...(timingErr ? { recurringExtra0: timingErr } : {}) };
+    const v: { valid: boolean; errors: Record<string, string> } = Object.keys(extraErrs).length > 0
       ? { valid: false, errors: { ...base.errors, ...extraErrs } }
       : base;
     if (!v.valid) {

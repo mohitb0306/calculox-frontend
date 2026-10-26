@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from "react";
@@ -16,6 +15,7 @@ import AgeDifferenceCalculator from "./AgeDifferenceCalculator";
 import ReverseBMICalculator from "./ReverseBMICalculator";
 import type { MortgagePreset } from "./MortgageCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
 import type { AutoLoanPreset } from "./AutoLoanCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
+import type { AmortizationCalculatorProps } from "./AmortizationCalculator"; // type-only: erased at build, keeps the dynamic chunk separate
 
 // Mortgage is the largest calculator (schedule, charts, compare panel), so it is code-split.
 // The calculator UI is not SEO content (description/FAQ come from the CMS), so a plain skeleton is fine.
@@ -29,6 +29,15 @@ const MortgageCalculator = dynamic(() => import("./MortgageCalculator"), {
 
 // Auto Loan is also code-split (charts, schedule, sources panel).
 const AutoLoanCalculator = dynamic(() => import("./AutoLoanCalculator"), {
+  loading: () => (
+    <div className="p-10 text-center text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
+      Loading calculator…
+    </div>
+  ),
+});
+
+// Amortization is also code-split (schedule, two charts, extras panel, balance lookup).
+const AmortizationCalculator = dynamic(() => import("./AmortizationCalculator"), {
   loading: () => (
     <div className="p-10 text-center text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
       Loading calculator…
@@ -68,10 +77,10 @@ export const renderCalculatorComponent = (key: string, props: any) => {
   const normalizedKey = key.toLowerCase();
 
   switch (normalizedKey) {
-    case "emi": 
-    case "emi-calculator": 
+    case "emi":
+    case "emi-calculator":
         return <EMICalculator {...props} />;
-        
+
     case "bmi":
     case "bmi-calculator":
         return <BMICalculator {...props} />;
@@ -118,19 +127,26 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "car-loan-calculator-canada":
         return <AutoLoanCalculator {...props} preset={AUTO_LOAN_PRESETS[normalizedKey]} />;
 
-    case "sip": 
+    case "amortization":
+    case "amortization-calculator":
+    case "loan-amortization-calculator":
+        // No preset object: the component has no preset prop (Phase 1 has no aliases).
+        // Phase 2 aliases (loan-payoff-calculator, etc.) are added here when ready.
+        return <AmortizationCalculator {...props} />;
+
+    case "sip":
     case "sip-calculator":
         return <SIPCalculator {...props} />;
-        
-    case "gst": 
+
+    case "gst":
     case "gst-calculator":
         return <GSTCalculator {...props} />;
-        
-    case "percentage": 
+
+    case "percentage":
     case "percentage-calculator":
         return <PercentageCalculator {...props} />;
-        
-    case "age": 
+
+    case "age":
     case "age-calculator":
     case "chronological-age":
     case "chronological-age-calculator":
@@ -155,7 +171,7 @@ export const renderCalculatorComponent = (key: string, props: any) => {
     case "who-is-older-calculator":
         return <AgeDifferenceCalculator {...props} />;
 
-    default: 
+    default:
       // This UI matches the old CalculatorPage.jsx default case exactly
       return (
         <div className="text-center py-12">
